@@ -4,11 +4,35 @@ import os
 import sys
 from typing import Optional
 
-from data_manager import DataManager
+from data_manager import THRESHOLD, DataManager
 from file_handler import export_to_csv, export_to_json, import_from_csv, import_from_json
 from models import Transaction
 from validator import validate_amount, validate_date, validate_type, validate_year_month
 from visualizer import plot_monthly_pie, plot_monthly_trend
+
+# 加分项1：CLI 异常标记颜色支持（colorama 可选）
+try:
+    from colorama import Fore, Style, init as colorama_init
+
+    colorama_init()
+    _HAS_COLORAMA = True
+except ImportError:
+    _HAS_COLORAMA = False
+
+
+def _format_anomaly_suffix(
+    data_manager: DataManager, txn: Transaction, is_anomaly: bool
+) -> str:
+    """格式化异常消费标记文本（兼容 Windows CMD）。"""
+    if not is_anomaly:
+        return ""
+    avg = data_manager.get_category_avg(
+        txn.user_id, txn.category_id, txn.transaction_id
+    )
+    avg_text = f"  (该类历史均值: {avg:.2f})"
+    if _HAS_COLORAMA:
+        return f"  {Fore.RED}[🔴 异常]{Style.RESET_ALL}{avg_text}"
+    return f"  [异常]{avg_text}"
 
 
 def print_menu() -> None:
@@ -84,7 +108,7 @@ def add_transaction(data_manager: DataManager) -> None:
 
 
 def view_all_transactions(data_manager: DataManager) -> None:
-    """查看所有交易记录。"""
+    """查看所有交易记录（加分项1：异常消费标红/文本标记）。"""
     print("\n--- 所有交易记录 ---")
     if not data_manager.transactions:
         print("暂无记录。")
@@ -94,9 +118,11 @@ def view_all_transactions(data_manager: DataManager) -> None:
         category = data_manager.categories.get(txn.category_id)
         cat_name = category.name if category else "未知"
         type_label = "收入" if txn.type == "income" else "支出"
+        is_anomaly = data_manager.check_anomaly(txn)
+        anomaly_suffix = _format_anomaly_suffix(data_manager, txn, is_anomaly)
         print(
             f"ID:{txn.transaction_id} | {txn.date} | {type_label} | "
-            f"{cat_name} | ¥{txn.amount:.2f} | {txn.note}"
+            f"{cat_name} | ¥{txn.amount:.2f} | {txn.note}{anomaly_suffix}"
         )
 
 
@@ -212,8 +238,12 @@ def import_data(data_manager: DataManager) -> None:
         print(f"导入失败：{exc}")
 
 
-def main() -> None:
-    """主函数：构建命令行菜单循环。"""
+def run_cli() -> None:
+    """
+    启动命令行版本（基础得分项 3：while True 菜单循环）。
+
+    保留 CLI 入口以确保基础得分项中的循环与分支逻辑仍可验证。
+    """
     data_manager = DataManager()
     print(f"欢迎使用智能个人记账助手，当前用户：{data_manager.current_user.username}")
 
@@ -241,6 +271,27 @@ def main() -> None:
         else:
             # 输入错误时给出提示并循环回到菜单
             print("无效选项，请输入 1-7 之间的数字。")
+
+
+def run_gui() -> None:
+    """启动 tkinter GUI 版本。"""
+    from gui import run_gui as start_gui
+
+    start_gui()
+
+
+def main() -> None:
+    """
+    程序总入口：根据命令行参数选择 CLI 或 GUI 模式。
+
+    - python main.py          → GUI（默认）
+    - python main.py --gui    → GUI
+    - python main.py --cli    → 命令行
+    """
+    if "--cli" in sys.argv:
+        run_cli()
+    else:
+        run_gui()
 
 
 if __name__ == "__main__":

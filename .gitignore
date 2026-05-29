@@ -1,0 +1,28 @@
+# Python 环境与缓存
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE 配置
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 原有内容保留，再加：
+__pycache__/
+*.pyc
+.conda/
+*.db
+
+# 数据库文件（可选，如果你不想把本地数据上传）
+*.db
+expense_tracker.db
+
+# 其他
+.DS_Store

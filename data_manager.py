@@ -10,6 +10,9 @@ from models import DEFAULT_CATEGORIES, Category, Transaction, User
 # 数据库文件路径
 DB_PATH = "expense_tracker.db"
 
+# 加分项1：异常消费检测阈值（超过历史均值的倍数即标记为异常）
+THRESHOLD = 1.5
+
 
 class DataManager:
     """数据管理器：维护会话内存数据并提供数据库 CRUD 操作。"""
@@ -339,6 +342,75 @@ class DataManager:
                 summary[year_month] = {"income": 0.0, "expense": 0.0}
             summary[year_month][txn.type] += txn.amount
         return summary
+
+    def _get_expense_history_amounts(
+        self, user_id: int, category_id: int, exclude_transaction_id: int = 0
+    ) -> List[float]:
+        """
+        查询用户某分类的历史支出金额列表（不含指定记录）。
+
+        :param exclude_transaction_id: 排除的交易 ID，0 表示不排除
+        """
+        cursor = self.conn.cursor()
+        if exclude_transaction_id:
+            cursor.execute(
+                """
+                SELECT amount FROM transactions
+                WHERE user_id=? AND category_id=? AND type='expense'
+                  AND transaction_id != ?
+                """,
+                (user_id, category_id, exclude_transaction_id),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT amount FROM transactions
+                WHERE user_id=? AND category_id=? AND type='expense'
+                """,
+                (user_id, category_id),
+            )
+        return [float(row[0]) for row in cursor.fetchall()]
+
+    def get_category_avg(
+        self, user_id: int, category_id: int, exclude_transaction_id: int = 0
+    ) -> float:
+        """
+        获取用户某分类历史支出的算术平均值（用于 GUI 弹窗提示）。
+
+        :return: 历史均值；记录不足 2 条时返回 0.0
+        """
+        try:
+            amounts = self._get_expense_history_amounts(
+                user_id, category_id, exclude_transaction_id
+            )
+            if len(amounts) < 2:
+                return 0.0
+            return sum(amounts) / len(amounts)
+        except Exception:
+            return 0.0
+
+    def check_anomaly(self, transaction: Transaction) -> bool:
+        """
+        加分项1：基于历史均值自动标记异常消费。
+
+        仅检测支出；若该用户该分类历史支出不足 2 条则返回 False；
+        当金额超过历史均值 * THRESHOLD 时判定为异常。
+        """
+        if transaction.type != "expense":
+            return False
+
+        try:
+            history = self._get_expense_history_amounts(
+                transaction.user_id,
+                transaction.category_id,
+                transaction.transaction_id,
+            )
+            if len(history) < 2:
+                return False
+            avg = sum(history) / len(history)
+            return transaction.amount > avg * THRESHOLD
+        except Exception:
+            return False
 
     def close(self) -> None:
         """关闭数据库连接。"""
