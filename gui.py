@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 
 from data_manager import THRESHOLD, DataManager
 from file_handler import export_to_csv, export_to_json, import_from_csv, import_from_json
+from natural_parser import NaturalParser
 from validator import validate_amount, validate_date, validate_type, validate_year_month
 from visualizer import get_monthly_pie_figure, get_monthly_trend_figure
 
@@ -41,6 +42,12 @@ class ExpenseTrackerGUI(tk.Tk):
 
         # 分类 Combobox 显示名 -> category_id 映射
         self._category_map: Dict[str, int] = {}
+        # 账户 Combobox 显示名 -> account_id 映射
+        self._account_map: Dict[str, int] = {}
+        # 币种 Combobox 显示名 -> currency_id 映射
+        self._currency_map: Dict[str, int] = {}
+        # 自然语言解析器
+        self._natural_parser = NaturalParser()
 
         self._build_menu()
         self._build_layout()
@@ -58,7 +65,9 @@ class ExpenseTrackerGUI(tk.Tk):
         func_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="功能", menu=func_menu)
         func_menu.add_command(label="记一笔", command=lambda: self._show_panel("add"))
+        func_menu.add_command(label="自然语言记账", command=lambda: self._show_panel("nlp"))
         func_menu.add_command(label="查看记录", command=lambda: self._show_panel("view"))
+        func_menu.add_command(label="账户管理", command=lambda: self._show_panel("accounts"))
         func_menu.add_command(label="分类统计", command=lambda: self._show_panel("stats"))
         func_menu.add_command(label="月度报表", command=lambda: self._show_panel("report"))
         func_menu.add_separator()
@@ -78,7 +87,9 @@ class ExpenseTrackerGUI(tk.Tk):
 
         nav_items = [
             ("记一笔", "add"),
+            ("自然语言记账", "nlp"),
             ("查看记录", "view"),
+            ("账户管理", "accounts"),
             ("分类统计", "stats"),
             ("月度报表", "report"),
             ("导出数据", None),
@@ -119,7 +130,9 @@ class ExpenseTrackerGUI(tk.Tk):
 
         self.panels: Dict[str, ttk.Frame] = {
             "add": self._build_add_panel(),
+            "nlp": self._build_nlp_panel(),
             "view": self._build_view_panel(),
+            "accounts": self._build_accounts_panel(),
             "stats": self._build_stats_panel(),
             "report": self._build_report_panel(),
         }
@@ -136,6 +149,9 @@ class ExpenseTrackerGUI(tk.Tk):
             self._refresh_stats_table()
         elif panel_key == "report":
             self._refresh_month_options()
+        elif panel_key == "accounts":
+            self._refresh_accounts_table()
+            self._refresh_currency_table()
 
     # ---------- 记一笔面板（得分项 3/4/6） ----------
 
@@ -176,17 +192,29 @@ class ExpenseTrackerGUI(tk.Tk):
         self.amount_entry.grid(row=3, column=1, sticky=tk.W, pady=6)
         self.amount_entry.bind("<FocusOut>", self._validate_amount_field)
 
+        # 账户选择
+        ttk.Label(panel, text="账户：").grid(row=4, column=0, sticky=tk.W, pady=6)
+        self.account_combo = ttk.Combobox(panel, width=28, state="readonly")
+        self.account_combo.grid(row=4, column=1, sticky=tk.W, pady=6)
+        self._refresh_account_combo()
+
+        # 币种选择
+        ttk.Label(panel, text="币种：").grid(row=5, column=0, sticky=tk.W, pady=6)
+        self.currency_combo = ttk.Combobox(panel, width=28, state="readonly")
+        self.currency_combo.grid(row=5, column=1, sticky=tk.W, pady=6)
+        self._refresh_currency_combo()
+
         # 备注
-        ttk.Label(panel, text="备注：").grid(row=4, column=0, sticky=tk.W, pady=6)
+        ttk.Label(panel, text="备注：").grid(row=6, column=0, sticky=tk.W, pady=6)
         self.note_entry = ttk.Entry(panel, width=30)
-        self.note_entry.grid(row=4, column=1, sticky=tk.W, pady=6)
+        self.note_entry.grid(row=6, column=1, sticky=tk.W, pady=6)
 
         ttk.Label(panel, text="提示：日期格式 YYYY-MM-DD，金额最多两位小数").grid(
-            row=5, column=0, columnspan=2, sticky=tk.W, pady=(4, 0)
+            row=7, column=0, columnspan=2, sticky=tk.W, pady=(4, 0)
         )
 
         ttk.Button(panel, text="保存", command=self._on_save_transaction).grid(
-            row=6, column=0, columnspan=2, pady=16
+            row=8, column=0, columnspan=2, pady=16
         )
         return panel
 
@@ -207,6 +235,34 @@ class ExpenseTrackerGUI(tk.Tk):
         self.category_combo["values"] = display_names
         if display_names:
             self.category_combo.current(0)
+
+    def _refresh_account_combo(self) -> None:
+        """从 DataManager 加载账户列表到 Combobox。"""
+        accounts = self.data_manager.get_accounts()
+        self._account_map = {}
+        display_names = []
+        for acc in accounts:
+            currency = self.data_manager.currencies.get(acc.currency_id)
+            currency_code = currency.code if currency else "CNY"
+            display = f"{acc.name} ({acc.type}) [{currency_code}]"
+            display_names.append(display)
+            self._account_map[display] = acc.account_id
+        self.account_combo["values"] = display_names
+        if display_names:
+            self.account_combo.current(0)
+
+    def _refresh_currency_combo(self) -> None:
+        """从 DataManager 加载币种列表到 Combobox。"""
+        currencies = self.data_manager.currencies.values()
+        self._currency_map = {}
+        display_names = []
+        for cur in currencies:
+            display = f"{cur.code} - {cur.name} (1{cur.symbol} = ¥{cur.rate_to_cny})"
+            display_names.append(display)
+            self._currency_map[display] = cur.currency_id
+        self.currency_combo["values"] = display_names
+        if display_names:
+            self.currency_combo.current(0)
 
     def _validate_date_field(self, event: Optional[tk.Event] = None) -> bool:
         """日期失去焦点时调用 validator 校验（得分项 4）。"""
@@ -255,8 +311,22 @@ class ExpenseTrackerGUI(tk.Tk):
                 messagebox.showerror("错误", "所选分类与类型不匹配。")
                 return
 
+            account_display = self.account_combo.get()
+            if not account_display or account_display not in self._account_map:
+                messagebox.showerror("错误", "请选择有效的账户。")
+                return
+            account_id = self._account_map[account_display]
+
+            currency_display = self.currency_combo.get()
+            if not currency_display or currency_display not in self._currency_map:
+                messagebox.showerror("错误", "请选择有效的币种。")
+                return
+            currency_id = self._currency_map[currency_display]
+
             note = self.note_entry.get().strip()
-            txn = self.data_manager.add_transaction(date, amount, category_id, txn_type, note)
+            txn = self.data_manager.add_transaction(
+                date, amount, category_id, txn_type, note, account_id, currency_id
+            )
 
             self.amount_entry.delete(0, tk.END)
             self.note_entry.delete(0, tk.END)
@@ -286,7 +356,7 @@ class ExpenseTrackerGUI(tk.Tk):
         """构建「查看记录」Treeview 面板。"""
         panel = ttk.LabelFrame(self.content_frame, text="所有交易记录", padding=8)
 
-        columns = ("id", "date", "type", "category", "amount", "note")
+        columns = ("id", "date", "type", "category", "amount", "currency", "account", "note")
         self.records_tree = ttk.Treeview(
             panel, columns=columns, show="headings", height=18
         )
@@ -296,11 +366,18 @@ class ExpenseTrackerGUI(tk.Tk):
             "type": "类型",
             "category": "分类",
             "amount": "金额",
+            "currency": "币种",
+            "account": "账户",
             "note": "备注",
         }
         for col, title in headings.items():
             self.records_tree.heading(col, text=title)
-            width = 80 if col != "note" else 200
+            if col == "note":
+                width = 150
+            elif col in ("account", "category"):
+                width = 100
+            else:
+                width = 70
             self.records_tree.column(col, width=width, anchor=tk.CENTER)
 
         # 加分项1：异常消费行标红加粗
@@ -335,6 +412,11 @@ class ExpenseTrackerGUI(tk.Tk):
         for txn in self.data_manager.transactions:
             category = self.data_manager.categories.get(txn.category_id)
             cat_name = category.name if category else "未知"
+            currency = self.data_manager.currencies.get(txn.currency_id)
+            currency_code = currency.code if currency else "CNY"
+            currency_symbol = currency.symbol if currency else "¥"
+            account = self.data_manager.accounts.get(txn.account_id)
+            account_name = account.name if account else "未知"
             type_label = "收入" if txn.type == "income" else "支出"
             # 加分项1：实时计算异常状态并设置行标签
             is_anomaly = self.data_manager.check_anomaly(txn)
@@ -350,7 +432,9 @@ class ExpenseTrackerGUI(tk.Tk):
                     txn.date,
                     type_label,
                     cat_name,
-                    f"¥{txn.amount:.2f}",
+                    f"{currency_symbol}{txn.amount:.2f}",
+                    currency_code,
+                    account_name,
                     note_text,
                 ),
                 tags=tags,
@@ -374,6 +458,497 @@ class ExpenseTrackerGUI(tk.Tk):
                     messagebox.showerror("错误", "删除失败。")
         except Exception as exc:
             messagebox.showerror("删除失败", str(exc))
+
+    # ---------- 自然语言记账面板（加分项 3） ----------
+
+    def _build_nlp_panel(self) -> ttk.Frame:
+        """构建「自然语言记账」面板（加分项3：自然语言记账）。"""
+        panel = ttk.LabelFrame(self.content_frame, text="自然语言记账", padding=12)
+
+        input_frame = ttk.LabelFrame(panel, text="输入描述", padding=8)
+        input_frame.pack(fill=tk.X, pady=(0, 12))
+
+        self.nlp_input = ttk.Entry(input_frame, width=60)
+        self.nlp_input.pack(side=tk.LEFT, padx=(0, 8), fill=tk.X, expand=True)
+        self.nlp_input.bind("<Return>", lambda e: self._on_nlp_parse())
+
+        ttk.Button(input_frame, text="解析", command=self._on_nlp_parse).pack(
+            side=tk.LEFT, padx=4
+        )
+        ttk.Button(input_frame, text="清空", command=self._on_nlp_clear).pack(
+            side=tk.LEFT, padx=4
+        )
+
+        result_frame = ttk.LabelFrame(panel, text="解析结果", padding=8)
+        result_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
+
+        self.nlp_result_text = tk.Text(
+            result_frame, height=8, wrap=tk.WORD, font=("微软雅黑", 10)
+        )
+        self.nlp_result_text.pack(fill=tk.BOTH, expand=True)
+
+        examples_frame = ttk.LabelFrame(panel, text="输入示例", padding=8)
+        examples_frame.pack(fill=tk.X, pady=(0, 12))
+
+        examples = [
+            "昨天午饭花了35",
+            "今天打车15元",
+            "收到红包500",
+            "明天发工资8000",
+            "3天前吃饭花了100",
+        ]
+        for i, example in enumerate(examples):
+            ttk.Button(
+                examples_frame,
+                text=example,
+                command=lambda ex=example: self._nlp_fill_example(ex),
+            ).grid(row=i // 3, column=i % 3, padx=4, pady=2, sticky=tk.W)
+
+        save_frame = ttk.Frame(panel)
+        save_frame.pack(fill=tk.X)
+
+        ttk.Button(save_frame, text="保存到数据库", command=self._on_nlp_save).pack(
+            side=tk.LEFT, padx=4
+        )
+        ttk.Label(save_frame, text="解析成功后可点击保存").pack(side=tk.LEFT, padx=8)
+
+        self._nlp_parsed_data = None
+
+        return panel
+
+    def _on_nlp_parse(self) -> None:
+        """解析自然语言输入。"""
+        input_text = self.nlp_input.get().strip()
+        if not input_text:
+            messagebox.showwarning("提示", "请输入描述内容。")
+            return
+
+        try:
+            result = self._natural_parser.parse(input_text)
+            if not result:
+                messagebox.showerror("解析失败", "无法解析金额，请确保输入中包含金额信息。")
+                self._nlp_parsed_data = None
+                self.nlp_result_text.delete(1.0, tk.END)
+                self.nlp_result_text.insert(tk.END, "解析失败：无法识别金额。\n")
+                return
+
+            self._nlp_parsed_data = result
+
+            self.nlp_result_text.delete(1.0, tk.END)
+            self.nlp_result_text.insert(tk.END, f"输入：{input_text}\n\n")
+            self.nlp_result_text.insert(tk.END, f"日期：{result.get('date', '-')}\n")
+            self.nlp_result_text.insert(tk.END, f"金额：{result.get('amount', '-')}\n")
+            type_label = "收入" if result.get('type') == 'income' else "支出"
+            self.nlp_result_text.insert(tk.END, f"类型：{type_label}\n")
+            self.nlp_result_text.insert(tk.END, f"分类：{result.get('category', '-')}\n")
+            if result.get('note'):
+                self.nlp_result_text.insert(tk.END, f"备注：{result.get('note', '-')}\n")
+            self.nlp_result_text.insert(tk.END, "\n✅ 解析成功！可以点击保存到数据库。")
+
+        except Exception as exc:
+            messagebox.showerror("解析失败", str(exc))
+            self._nlp_parsed_data = None
+
+    def _on_nlp_clear(self) -> None:
+        """清空自然语言输入和结果。"""
+        self.nlp_input.delete(0, tk.END)
+        self.nlp_result_text.delete(1.0, tk.END)
+        self._nlp_parsed_data = None
+
+    def _nlp_fill_example(self, example: str) -> None:
+        """填充示例文本到输入框。"""
+        self.nlp_input.delete(0, tk.END)
+        self.nlp_input.insert(0, example)
+
+    def _on_nlp_save(self) -> None:
+        """保存解析结果到数据库。"""
+        if not self._nlp_parsed_data:
+            messagebox.showwarning("提示", "请先解析输入内容。")
+            return
+
+        try:
+            data = self._nlp_parsed_data
+            date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+            amount = float(data.get('amount', 0))
+            category_name = data.get('category', '其他支出')
+            txn_type = data.get('type', 'expense')
+            note = data.get('note', '')
+
+            category_id = None
+            for cat in self.data_manager.categories.values():
+                if cat.name == category_name and cat.type == txn_type:
+                    category_id = cat.category_id
+                    break
+
+            if category_id is None:
+                messagebox.showerror("错误", f"找不到分类「{category_name}」。")
+                return
+
+            accounts = self.data_manager.get_accounts()
+            if not accounts:
+                messagebox.showerror("错误", "请先创建账户。")
+                return
+
+            account_id = accounts[0].account_id
+            currency_id = 1
+
+            txn = self.data_manager.add_transaction(
+                date, amount, category_id, txn_type, note, account_id, currency_id
+            )
+
+            messagebox.showinfo("成功", f"记录已保存！\n\n"
+                                       f"日期：{date}\n"
+                                       f"金额：¥{amount:.2f}\n"
+                                       f"类型：{'收入' if txn_type == 'income' else '支出'}\n"
+                                       f"分类：{category_name}")
+
+            self._on_nlp_clear()
+            self._refresh_records_table()
+
+        except ValueError as exc:
+            messagebox.showerror("输入错误", str(exc))
+        except Exception as exc:
+            messagebox.showerror("保存失败", str(exc))
+
+    # ---------- 账户管理面板（加分项 2） ----------
+
+    def _build_accounts_panel(self) -> ttk.Frame:
+        """构建「账户管理」面板（加分项2：多账户/多币种支持）。"""
+        panel = ttk.LabelFrame(self.content_frame, text="账户管理", padding=8)
+
+        notebook = ttk.Notebook(panel)
+        notebook.pack(fill=tk.BOTH, expand=True)
+
+        # 账户列表标签页
+        accounts_tab = ttk.Frame(notebook, padding=8)
+        notebook.add(accounts_tab, text="账户列表")
+        self._build_account_list_tab(accounts_tab)
+
+        # 添加账户标签页
+        add_account_tab = ttk.Frame(notebook, padding=8)
+        notebook.add(add_account_tab, text="添加账户")
+        self._build_add_account_tab(add_account_tab)
+
+        # 币种管理标签页
+        currency_tab = ttk.Frame(notebook, padding=8)
+        notebook.add(currency_tab, text="币种汇率")
+        self._build_currency_tab(currency_tab)
+
+        return panel
+
+    def _build_account_list_tab(self, parent: ttk.Frame) -> None:
+        """构建账户列表标签页。"""
+        columns = ("id", "name", "type", "balance", "currency")
+        self.accounts_tree = ttk.Treeview(
+            parent, columns=columns, show="headings", height=12
+        )
+        headings = {
+            "id": "ID",
+            "name": "账户名称",
+            "type": "类型",
+            "balance": "余额",
+            "currency": "币种",
+        }
+        for col, title in headings.items():
+            self.accounts_tree.heading(col, text=title)
+            if col == "name":
+                width = 150
+            elif col == "balance":
+                width = 100
+            else:
+                width = 80
+            self.accounts_tree.column(col, width=width, anchor=tk.CENTER)
+
+        scrollbar = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=self.accounts_tree.yview)
+        self.accounts_tree.configure(yscrollcommand=scrollbar.set)
+        self.accounts_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        total_frame = ttk.Frame(parent)
+        total_frame.pack(fill=tk.X, pady=(8, 0))
+
+        self.total_balance_label = ttk.Label(
+            total_frame, text="总余额（换算为人民币）：¥0.00", font=("微软雅黑", 10, "bold")
+        )
+        self.total_balance_label.pack(side=tk.LEFT, padx=4)
+
+        refresh_btn = ttk.Button(
+            total_frame, text="刷新", command=self._refresh_accounts_table
+        )
+        refresh_btn.pack(side=tk.RIGHT, padx=4)
+
+    def _build_add_account_tab(self, parent: ttk.Frame) -> None:
+        """构建添加账户标签页。"""
+        form_frame = ttk.LabelFrame(parent, text="账户信息", padding=12)
+        form_frame.pack(fill=tk.X, pady=(0, 12))
+
+        ttk.Label(form_frame, text="账户名称：").grid(row=0, column=0, sticky=tk.W, pady=6)
+        self.new_account_name = ttk.Entry(form_frame, width=30)
+        self.new_account_name.grid(row=0, column=1, sticky=tk.W, pady=6)
+
+        ttk.Label(form_frame, text="账户类型：").grid(row=1, column=0, sticky=tk.W, pady=6)
+        self.new_account_type = ttk.Combobox(
+            form_frame,
+            values=["cash", "card", "alipay", "wechat", "other"],
+            state="readonly",
+            width=28,
+        )
+        self.new_account_type.grid(row=1, column=1, sticky=tk.W, pady=6)
+        self.new_account_type.current(0)
+
+        ttk.Label(form_frame, text="币种：").grid(row=2, column=0, sticky=tk.W, pady=6)
+        self.new_account_currency = ttk.Combobox(form_frame, state="readonly", width=28)
+        self.new_account_currency.grid(row=2, column=1, sticky=tk.W, pady=6)
+        self._refresh_currency_combo_for_new_account()
+
+        ttk.Label(form_frame, text="初始余额：").grid(row=3, column=0, sticky=tk.W, pady=6)
+        self.new_account_balance = ttk.Entry(form_frame, width=30)
+        self.new_account_balance.grid(row=3, column=1, sticky=tk.W, pady=6)
+        self.new_account_balance.insert(0, "0.00")
+
+        btn_frame = ttk.Frame(parent)
+        btn_frame.pack(fill=tk.X, pady=8)
+
+        ttk.Button(btn_frame, text="创建账户", command=self._on_create_account).pack(
+            side=tk.LEFT, padx=4
+        )
+        ttk.Button(btn_frame, text="清空", command=self._on_clear_new_account).pack(
+            side=tk.LEFT, padx=4
+        )
+
+        tips_frame = ttk.LabelFrame(parent, text="账户类型说明", padding=8)
+        tips_frame.pack(fill=tk.X, pady=(12, 0))
+
+        type_tips = [
+            "cash：现金",
+            "card：银行卡",
+            "alipay：支付宝",
+            "wechat：微信支付",
+            "other：其他类型",
+        ]
+        for tip in type_tips:
+            ttk.Label(tips_frame, text=f"• {tip}").pack(anchor=tk.W, pady=2)
+
+    def _build_currency_tab(self, parent: ttk.Frame) -> None:
+        """构建币种汇率标签页。"""
+        table_frame = ttk.LabelFrame(parent, text="当前汇率（对人民币）", padding=8)
+        table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
+
+        columns = ("id", "code", "name", "symbol", "rate")
+        self.currency_tree = ttk.Treeview(
+            table_frame, columns=columns, show="headings", height=10
+        )
+        headings = {
+            "id": "ID",
+            "code": "代码",
+            "name": "名称",
+            "symbol": "符号",
+            "rate": "对人民币汇率",
+        }
+        for col, title in headings.items():
+            self.currency_tree.heading(col, text=title)
+            if col in ("name", "rate"):
+                width = 120
+            else:
+                width = 70
+            self.currency_tree.column(col, width=width, anchor=tk.CENTER)
+
+        scrollbar = ttk.Scrollbar(
+            table_frame, orient=tk.VERTICAL, command=self.currency_tree.yview
+        )
+        self.currency_tree.configure(yscrollcommand=scrollbar.set)
+        self.currency_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        update_frame = ttk.LabelFrame(parent, text="更新汇率", padding=8)
+        update_frame.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(update_frame, text="选择币种：").grid(row=0, column=0, sticky=tk.W, pady=4)
+        self.update_currency_combo = ttk.Combobox(update_frame, state="readonly", width=20)
+        self.update_currency_combo.grid(row=0, column=1, sticky=tk.W, pady=4, padx=(0, 8))
+
+        ttk.Label(update_frame, text="新汇率：").grid(row=0, column=2, sticky=tk.W, pady=4)
+        self.new_rate_entry = ttk.Entry(update_frame, width=15)
+        self.new_rate_entry.grid(row=0, column=3, sticky=tk.W, pady=4, padx=(0, 8))
+
+        ttk.Button(update_frame, text="更新", command=self._on_update_rate).grid(
+            row=0, column=4, sticky=tk.W, pady=4, padx=4
+        )
+
+        tips_frame = ttk.LabelFrame(parent, text="汇率说明", padding=8)
+        tips_frame.pack(fill=tk.X)
+        ttk.Label(
+            tips_frame,
+            text="汇率表示 1 单位外币可兑换的人民币数量。例如：1 美元 = 7.24 人民币，则汇率为 7.24",
+        ).pack(anchor=tk.W)
+
+    def _refresh_accounts_table(self) -> None:
+        """刷新账户列表表格。"""
+        for item in self.accounts_tree.get_children():
+            self.accounts_tree.delete(item)
+
+        type_names = {
+            "cash": "现金",
+            "card": "银行卡",
+            "alipay": "支付宝",
+            "wechat": "微信",
+            "other": "其他",
+        }
+
+        for acc in self.data_manager.get_accounts():
+            currency = self.data_manager.currencies.get(acc.currency_id)
+            currency_code = currency.code if currency else "CNY"
+            currency_symbol = currency.symbol if currency else "¥"
+            type_name = type_names.get(acc.type, acc.type)
+
+            self.accounts_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    acc.account_id,
+                    acc.name,
+                    type_name,
+                    f"{currency_symbol}{acc.balance:.2f}",
+                    currency_code,
+                ),
+            )
+
+        total = self.data_manager.get_total_balance_in_cny()
+        self.total_balance_label.config(
+            text=f"总余额（换算为人民币）：¥{total:.2f}"
+        )
+
+    def _refresh_currency_combo_for_new_account(self) -> None:
+        """刷新添加账户时的币种下拉框。"""
+        currencies = self.data_manager.currencies.values()
+        display_names = []
+        self._currency_map_for_new = {}
+        for cur in currencies:
+            display = f"{cur.code} - {cur.name}"
+            display_names.append(display)
+            self._currency_map_for_new[display] = cur.currency_id
+        self.new_account_currency["values"] = display_names
+        if display_names:
+            self.new_account_currency.current(0)
+
+    def _refresh_currency_table(self) -> None:
+        """刷新币种汇率表格。"""
+        for item in self.currency_tree.get_children():
+            self.currency_tree.delete(item)
+
+        for cur in self.data_manager.currencies.values():
+            self.currency_tree.insert(
+                "",
+                tk.END,
+                values=(
+                    cur.currency_id,
+                    cur.code,
+                    cur.name,
+                    cur.symbol,
+                    f"{cur.rate_to_cny:.4f}",
+                ),
+            )
+
+        currencies = self.data_manager.currencies.values()
+        display_names = []
+        self._currency_map_for_update = {}
+        for cur in currencies:
+            display = f"{cur.code} - {cur.name}"
+            display_names.append(display)
+            self._currency_map_for_update[display] = cur.currency_id
+        self.update_currency_combo["values"] = display_names
+        if display_names:
+            self.update_currency_combo.current(0)
+
+    def _on_create_account(self) -> None:
+        """创建新账户。"""
+        try:
+            name = self.new_account_name.get().strip()
+            if not name:
+                messagebox.showerror("错误", "请输入账户名称。")
+                return
+
+            account_type = self.new_account_type.get()
+            if not account_type:
+                messagebox.showerror("错误", "请选择账户类型。")
+                return
+
+            currency_display = self.new_account_currency.get()
+            if not currency_display or currency_display not in self._currency_map_for_new:
+                messagebox.showerror("错误", "请选择币种。")
+                return
+            currency_id = self._currency_map_for_new[currency_display]
+
+            balance_text = self.new_account_balance.get().strip()
+            try:
+                balance = float(balance_text)
+                if balance < 0:
+                    messagebox.showerror("错误", "余额不能为负数。")
+                    return
+            except ValueError:
+                messagebox.showerror("错误", "余额必须是有效的数字。")
+                return
+
+            account = self.data_manager.add_account(name, account_type, currency_id, balance)
+
+            messagebox.showinfo(
+                "成功",
+                f"账户创建成功！\n\n"
+                f"名称：{account.name}\n"
+                f"类型：{account.type}\n"
+                f"币种：{currency_id}\n"
+                f"初始余额：{balance:.2f}",
+            )
+
+            self._on_clear_new_account()
+            self._refresh_accounts_table()
+            self._refresh_account_combo()
+
+        except Exception as exc:
+            messagebox.showerror("创建失败", str(exc))
+
+    def _on_clear_new_account(self) -> None:
+        """清空添加账户表单。"""
+        self.new_account_name.delete(0, tk.END)
+        self.new_account_type.current(0)
+        self.new_account_balance.delete(0, tk.END)
+        self.new_account_balance.insert(0, "0.00")
+        if self.new_account_currency["values"]:
+            self.new_account_currency.current(0)
+
+    def _on_update_rate(self) -> None:
+        """更新币种汇率。"""
+        try:
+            currency_display = self.update_currency_combo.get()
+            if not currency_display or currency_display not in self._currency_map_for_update:
+                messagebox.showerror("错误", "请选择币种。")
+                return
+            currency_id = self._currency_map_for_update[currency_display]
+
+            new_rate_text = self.new_rate_entry.get().strip()
+            try:
+                new_rate = float(new_rate_text)
+                if new_rate <= 0:
+                    messagebox.showerror("错误", "汇率必须大于0。")
+                    return
+            except ValueError:
+                messagebox.showerror("错误", "汇率必须是有效的数字。")
+                return
+
+            if self.data_manager.update_currency_rate(currency_id, new_rate):
+                messagebox.showinfo(
+                    "成功",
+                    f"汇率更新成功！\n"
+                    f"{currency_display} 新汇率：{new_rate:.4f}",
+                )
+                self.new_rate_entry.delete(0, tk.END)
+                self._refresh_currency_table()
+                self._refresh_currency_combo()
+            else:
+                messagebox.showerror("错误", "更新汇率失败。")
+
+        except Exception as exc:
+            messagebox.showerror("更新失败", str(exc))
 
     # ---------- 分类统计面板（得分项 2） ----------
 
