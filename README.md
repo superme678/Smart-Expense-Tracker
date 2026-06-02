@@ -579,12 +579,11 @@ amount_in_target = amount_in_cny / to_currency.rate_to_cny
 
 | 贡献者 | GitHub 用户名 | 负责模块 |
 |--------|---------------|----------|
-| 基础功能 | superme678 | OOP 设计、数据结构、菜单交互、正则校验、文件 I/O、SQLite、matplotlib 图表 |
-| CLI 加分项 | gwen-per | **CLI 版本**：多账户/多币种支持、汇率转换、自然语言记账（`main.py`, `models.py`, `data_manager.py`, `natural_parser.py`） |
-| GUI 加分项 | (第三个同学的账号) | **GUI 版本**：多账户/多币种界面、自然语言记账界面、账户管理界面（`gui.py`） |
+| 基础功能 | superme678（赵文斌） | OOP 设计、数据结构、菜单交互、正则校验、文件 I/O、SQLite、matplotlib 图表 |
+| CLI 加分项 | gwen-per（郭荣） | **CLI 版本**：多账户/多币种支持、汇率转换、自然语言记账（`main.py`, `models.py`, `data_manager.py`, `natural_parser.py`） |
+| GUI 加分项 | anirvanab-123（张曦月） | **GUI 版本**：多账户/多币种界面、自然语言记账界面、账户管理界面（`gui.py`） |
 
-### GUI 版本新增功能（第三个人贡献）
-
+### GUI 版本新增功能
 **数据层（DataManager）：**
 
 | 功能模块 | 方法 | 文件 | 说明 |
