@@ -664,6 +664,101 @@ class DataManager:
                 total += account.balance * currency.rate_to_cny
         return round(total, 2)
 
+    def search_transactions(
+        self,
+        keyword: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        txn_type: Optional[str] = None,
+        category_id: Optional[int] = None,
+        min_amount: Optional[float] = None,
+        max_amount: Optional[float] = None,
+    ) -> List[Transaction]:
+        """
+        高级搜索：根据多条件查询交易记录。
+
+        :param keyword: 关键词搜索（备注中包含）
+        :param start_date: 开始日期（YYYY-MM-DD）
+        :param end_date: 结束日期（YYYY-MM-DD）
+        :param txn_type: 交易类型（income/expense）
+        :param category_id: 分类ID
+        :param min_amount: 最小金额
+        :param max_amount: 最大金额
+        :return: 匹配的交易记录列表
+        """
+        results = list(self.transactions)
+
+        if self.current_user is not None:
+            results = [t for t in results if t.user_id == self.current_user.user_id]
+
+        if keyword:
+            keyword_lower = keyword.lower()
+            results = [
+                t for t in results
+                if keyword_lower in t.note.lower()
+            ]
+
+        if start_date:
+            results = [t for t in results if t.date >= start_date]
+
+        if end_date:
+            results = [t for t in results if t.date <= end_date]
+
+        if txn_type:
+            results = [t for t in results if t.type == txn_type]
+
+        if category_id is not None:
+            results = [t for t in results if t.category_id == category_id]
+
+        if min_amount is not None:
+            results = [t for t in results if t.amount >= min_amount]
+
+        if max_amount is not None:
+            results = [t for t in results if t.amount <= max_amount]
+
+        return results
+
+    def backup_database(self, backup_path: Optional[str] = None) -> str:
+        """
+        备份数据库文件。
+
+        :param backup_path: 备份文件路径，默认为 expense_tracker_YYYYMMDD_HHMMSS.db
+        :return: 备份文件的完整路径
+        """
+        import shutil
+
+        if not os.path.exists(DB_PATH):
+            raise FileNotFoundError("数据库文件不存在，无法备份。")
+
+        if backup_path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = f"expense_tracker_backup_{timestamp}.db"
+
+        shutil.copy2(DB_PATH, backup_path)
+        return os.path.abspath(backup_path)
+
+    def restore_database(self, backup_path: str) -> bool:
+        """
+        从备份文件恢复数据库。
+
+        :param backup_path: 备份文件路径
+        :return: 是否恢复成功
+        """
+        import shutil
+
+        if not os.path.exists(backup_path):
+            raise FileNotFoundError(f"备份文件不存在：{backup_path}")
+
+        if self.conn:
+            self.close()
+
+        shutil.copy2(backup_path, DB_PATH)
+
+        self.conn = sqlite3.connect(DB_PATH)
+        self._load_all_data()
+
+        return True
+
     def close(self) -> None:
         """关闭数据库连接。"""
         if self.conn:

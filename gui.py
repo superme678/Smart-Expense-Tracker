@@ -66,6 +66,7 @@ class ExpenseTrackerGUI(tk.Tk):
         menubar.add_cascade(label="功能", menu=func_menu)
         func_menu.add_command(label="记一笔", command=lambda: self._show_panel("add"))
         func_menu.add_command(label="自然语言记账", command=lambda: self._show_panel("nlp"))
+        func_menu.add_command(label="高级搜索", command=lambda: self._show_panel("search"))
         func_menu.add_command(label="查看记录", command=lambda: self._show_panel("view"))
         func_menu.add_command(label="账户管理", command=lambda: self._show_panel("accounts"))
         func_menu.add_command(label="分类统计", command=lambda: self._show_panel("stats"))
@@ -73,6 +74,9 @@ class ExpenseTrackerGUI(tk.Tk):
         func_menu.add_separator()
         func_menu.add_command(label="导出数据", command=self._on_export)
         func_menu.add_command(label="导入数据", command=self._on_import)
+        func_menu.add_separator()
+        func_menu.add_command(label="备份数据", command=self._on_backup)
+        func_menu.add_command(label="还原数据", command=self._on_restore)
         func_menu.add_separator()
         func_menu.add_command(label="退出", command=self._on_exit)
 
@@ -88,12 +92,15 @@ class ExpenseTrackerGUI(tk.Tk):
         nav_items = [
             ("记一笔", "add"),
             ("自然语言记账", "nlp"),
+            ("高级搜索", "search"),
             ("查看记录", "view"),
             ("账户管理", "accounts"),
             ("分类统计", "stats"),
             ("月度报表", "report"),
             ("导出数据", None),
             ("导入数据", None),
+            ("备份数据", None),
+            ("还原数据", None),
             ("退出", None),
         ]
         for text, panel_key in nav_items:
@@ -110,6 +117,14 @@ class ExpenseTrackerGUI(tk.Tk):
                 )
             elif text == "导入数据":
                 ttk.Button(nav_frame, text=text, width=14, command=self._on_import).pack(
+                    pady=4, fill=tk.X
+                )
+            elif text == "备份数据":
+                ttk.Button(nav_frame, text=text, width=14, command=self._on_backup).pack(
+                    pady=4, fill=tk.X
+                )
+            elif text == "还原数据":
+                ttk.Button(nav_frame, text=text, width=14, command=self._on_restore).pack(
                     pady=4, fill=tk.X
                 )
             else:
@@ -131,6 +146,7 @@ class ExpenseTrackerGUI(tk.Tk):
         self.panels: Dict[str, ttk.Frame] = {
             "add": self._build_add_panel(),
             "nlp": self._build_nlp_panel(),
+            "search": self._build_search_panel(),
             "view": self._build_view_panel(),
             "accounts": self._build_accounts_panel(),
             "stats": self._build_stats_panel(),
@@ -458,6 +474,259 @@ class ExpenseTrackerGUI(tk.Tk):
                     messagebox.showerror("错误", "删除失败。")
         except Exception as exc:
             messagebox.showerror("删除失败", str(exc))
+
+    # ---------- 高级搜索面板 ----------
+
+    def _build_search_panel(self) -> ttk.Frame:
+        """构建「高级搜索」面板。"""
+        panel = ttk.LabelFrame(self.content_frame, text="高级搜索", padding=12)
+
+        filter_frame = ttk.LabelFrame(panel, text="搜索条件", padding=8)
+        filter_frame.pack(fill=tk.X, pady=(0, 12))
+
+        row = 0
+
+        ttk.Label(filter_frame, text="关键词：").grid(row=row, column=0, sticky=tk.W, pady=4)
+        self.search_keyword = ttk.Entry(filter_frame, width=25)
+        self.search_keyword.grid(row=row, column=1, sticky=tk.W, pady=4, padx=(0, 12))
+
+        ttk.Label(filter_frame, text="交易类型：").grid(row=row, column=2, sticky=tk.W, pady=4)
+        self.search_type = ttk.Combobox(
+            filter_frame,
+            values=["全部", "支出", "收入"],
+            state="readonly",
+            width=10,
+        )
+        self.search_type.grid(row=row, column=3, sticky=tk.W, pady=4)
+        self.search_type.current(0)
+
+        row += 1
+
+        ttk.Label(filter_frame, text="开始日期：").grid(row=row, column=0, sticky=tk.W, pady=4)
+        self.search_start_date = ttk.Entry(filter_frame, width=15)
+        self.search_start_date.grid(row=row, column=1, sticky=tk.W, pady=4, padx=(0, 12))
+        self.search_start_date.bind("<FocusOut>", self._validate_search_start_date)
+
+        ttk.Label(filter_frame, text="结束日期：").grid(row=row, column=2, sticky=tk.W, pady=4)
+        self.search_end_date = ttk.Entry(filter_frame, width=15)
+        self.search_end_date.grid(row=row, column=3, sticky=tk.W, pady=4)
+        self.search_end_date.bind("<FocusOut>", self._validate_search_end_date)
+
+        row += 1
+
+        ttk.Label(filter_frame, text="最小金额：").grid(row=row, column=0, sticky=tk.W, pady=4)
+        self.search_min_amount = ttk.Entry(filter_frame, width=15)
+        self.search_min_amount.grid(row=row, column=1, sticky=tk.W, pady=4, padx=(0, 12))
+
+        ttk.Label(filter_frame, text="最大金额：").grid(row=row, column=2, sticky=tk.W, pady=4)
+        self.search_max_amount = ttk.Entry(filter_frame, width=15)
+        self.search_max_amount.grid(row=row, column=3, sticky=tk.W, pady=4)
+
+        row += 1
+
+        btn_frame = ttk.Frame(filter_frame)
+        btn_frame.grid(row=row, column=0, columnspan=4, pady=8)
+
+        ttk.Button(btn_frame, text="搜索", command=self._on_search).pack(
+            side=tk.LEFT, padx=4
+        )
+        ttk.Button(btn_frame, text="重置条件", command=self._on_reset_search).pack(
+            side=tk.LEFT, padx=4
+        )
+
+        ttk.Label(filter_frame, text="提示：日期格式 YYYY-MM-DD，留空表示不限制").grid(
+            row=row + 1, column=0, columnspan=4, sticky=tk.W, pady=(0, 4)
+        )
+
+        result_frame = ttk.LabelFrame(panel, text="搜索结果", padding=8)
+        result_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+
+        columns = ("id", "date", "type", "category", "amount", "currency", "account", "note")
+        self.search_result_tree = ttk.Treeview(
+            result_frame, columns=columns, show="headings", height=12
+        )
+        headings = {
+            "id": "ID",
+            "date": "日期",
+            "type": "类型",
+            "category": "分类",
+            "amount": "金额",
+            "currency": "币种",
+            "account": "账户",
+            "note": "备注",
+        }
+        for col, title in headings.items():
+            self.search_result_tree.heading(col, text=title)
+            if col == "note":
+                width = 150
+            elif col in ("account", "category"):
+                width = 100
+            else:
+                width = 70
+            self.search_result_tree.column(col, width=width, anchor=tk.CENTER)
+
+        scrollbar = ttk.Scrollbar(
+            result_frame, orient=tk.VERTICAL, command=self.search_result_tree.yview
+        )
+        self.search_result_tree.configure(yscrollcommand=scrollbar.set)
+        self.search_result_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.search_result_label = ttk.Label(panel, text="共找到 0 条记录")
+        self.search_result_label.pack(anchor=tk.W)
+
+        return panel
+
+    def _validate_search_start_date(self, event: Optional[tk.Event] = None) -> bool:
+        """校验搜索开始日期。"""
+        date_str = self.search_start_date.get().strip()
+        if not date_str:
+            return True
+        try:
+            validated = validate_date(date_str)
+            self.search_start_date.delete(0, tk.END)
+            self.search_start_date.insert(0, validated)
+            return True
+        except ValueError as exc:
+            messagebox.showerror("日期错误", str(exc))
+            return False
+
+    def _validate_search_end_date(self, event: Optional[tk.Event] = None) -> bool:
+        """校验搜索结束日期。"""
+        date_str = self.search_end_date.get().strip()
+        if not date_str:
+            return True
+        try:
+            validated = validate_date(date_str)
+            self.search_end_date.delete(0, tk.END)
+            self.search_end_date.insert(0, validated)
+            return True
+        except ValueError as exc:
+            messagebox.showerror("日期错误", str(exc))
+            return False
+
+    def _on_search(self) -> None:
+        """执行搜索。"""
+        try:
+            keyword = self.search_keyword.get().strip() or None
+
+            start_date = self.search_start_date.get().strip() or None
+            if start_date:
+                start_date = validate_date(start_date)
+
+            end_date = self.search_end_date.get().strip() or None
+            if end_date:
+                end_date = validate_date(end_date)
+
+            type_choice = self.search_type.get()
+            if type_choice == "支出":
+                txn_type = "expense"
+            elif type_choice == "收入":
+                txn_type = "income"
+            else:
+                txn_type = None
+
+            min_amount_str = self.search_min_amount.get().strip()
+            min_amount = float(min_amount_str) if min_amount_str else None
+
+            max_amount_str = self.search_max_amount.get().strip()
+            max_amount = float(max_amount_str) if max_amount_str else None
+
+            results = self.data_manager.search_transactions(
+                keyword=keyword,
+                start_date=start_date,
+                end_date=end_date,
+                txn_type=txn_type,
+                min_amount=min_amount,
+                max_amount=max_amount,
+            )
+
+            for item in self.search_result_tree.get_children():
+                self.search_result_tree.delete(item)
+
+            for txn in results:
+                category = self.data_manager.categories.get(txn.category_id)
+                cat_name = category.name if category else "未知"
+                currency = self.data_manager.currencies.get(txn.currency_id)
+                currency_code = currency.code if currency else "CNY"
+                currency_symbol = currency.symbol if currency else "¥"
+                account = self.data_manager.accounts.get(txn.account_id)
+                account_name = account.name if account else "未知"
+                type_label = "收入" if txn.type == "income" else "支出"
+
+                self.search_result_tree.insert(
+                    "",
+                    tk.END,
+                    values=(
+                        txn.transaction_id,
+                        txn.date,
+                        type_label,
+                        cat_name,
+                        f"{currency_symbol}{txn.amount:.2f}",
+                        currency_code,
+                        account_name,
+                        txn.note,
+                    ),
+                )
+
+            self.search_result_label.config(text=f"共找到 {len(results)} 条记录")
+
+        except ValueError as exc:
+            messagebox.showerror("输入错误", str(exc))
+        except Exception as exc:
+            messagebox.showerror("搜索失败", str(exc))
+
+    def _on_reset_search(self) -> None:
+        """重置搜索条件。"""
+        self.search_keyword.delete(0, tk.END)
+        self.search_start_date.delete(0, tk.END)
+        self.search_end_date.delete(0, tk.END)
+        self.search_type.current(0)
+        self.search_min_amount.delete(0, tk.END)
+        self.search_max_amount.delete(0, tk.END)
+
+        for item in self.search_result_tree.get_children():
+            self.search_result_tree.delete(item)
+        self.search_result_label.config(text="共找到 0 条记录")
+
+    def _on_backup(self) -> None:
+        """备份数据库。"""
+        try:
+            backup_path = self.data_manager.backup_database()
+            messagebox.showinfo("备份成功", f"数据库已备份到：\n{backup_path}")
+        except FileNotFoundError as exc:
+            messagebox.showerror("备份失败", str(exc))
+        except Exception as exc:
+            messagebox.showerror("备份失败", str(exc))
+
+    def _on_restore(self) -> None:
+        """从备份文件恢复数据库。"""
+        try:
+            if not messagebox.askyesno("确认", "恢复数据库将覆盖当前所有数据，确定继续吗？"):
+                return
+
+            backup_path = filedialog.askopenfilename(
+                title="选择备份文件",
+                filetypes=[
+                    ("数据库备份", "*.db"),
+                    ("所有文件", "*.*"),
+                ],
+            )
+
+            if not backup_path:
+                return
+
+            if self.data_manager.restore_database(backup_path):
+                messagebox.showinfo("恢复成功", "数据库已从备份文件恢复！")
+                self._refresh_records_table()
+                self._refresh_accounts_table()
+            else:
+                messagebox.showerror("恢复失败", "数据库恢复失败。")
+
+        except FileNotFoundError as exc:
+            messagebox.showerror("恢复失败", str(exc))
+        except Exception as exc:
+            messagebox.showerror("恢复失败", str(exc))
 
     # ---------- 自然语言记账面板（加分项 3） ----------
 

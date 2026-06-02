@@ -580,4 +580,84 @@ amount_in_target = amount_in_cny / to_currency.rate_to_cny
 | 贡献者 | GitHub 用户名 | 负责模块 |
 |--------|---------------|----------|
 | 基础功能 | superme678 | OOP 设计、数据结构、菜单交互、正则校验、文件 I/O、SQLite、matplotlib 图表 |
-| 加分项 2 & 3 | gwen-per | 多账户/多币种支持、汇率转换、自然语言记账 |
+| CLI 加分项 | gwen-per | **CLI 版本**：多账户/多币种支持、汇率转换、自然语言记账（`main.py`, `models.py`, `data_manager.py`, `natural_parser.py`） |
+| GUI 加分项 | (第三个同学的账号) | **GUI 版本**：多账户/多币种界面、自然语言记账界面、账户管理界面（`gui.py`） |
+
+### GUI 版本新增功能（第三个人贡献）
+
+**数据层（DataManager）：**
+
+| 功能模块 | 方法 | 文件 | 说明 |
+|---------|------|------|------|
+| 高级搜索 | `search_transactions()` | `data_manager.py` | 多条件搜索：关键词、日期范围、类型、金额范围 |
+| 数据备份 | `backup_database()` | `data_manager.py` | 一键备份数据库，自动生成时间戳文件名 |
+| 数据还原 | `restore_database()` | `data_manager.py` | 从备份文件恢复数据库 |
+
+**界面层（GUI）：**
+
+| 功能模块 | 方法/常量 | 文件 | 说明 |
+|---------|-----------|------|------|
+| 初始化 | `_account_map`, `_currency_map`, `_natural_parser` | `gui.py` | 账户、币种映射字典，自然语言解析器实例 |
+| 菜单/导航 | `_build_menu`, `_build_layout` | `gui.py` | 添加「自然语言记账」「账户管理」「高级搜索」「备份数据」「还原数据」 |
+| 记一笔-账户选择 | `_refresh_account_combo` | `gui.py` | 加载账户列表到下拉框 |
+| 记一笔-币种选择 | `_refresh_currency_combo` | `gui.py` | 加载币种列表到下拉框 |
+| 记一笔-保存 | `_on_save_transaction` (已增强) | `gui.py` | 支持账户ID和币种ID参数 |
+| 查看记录 | `_build_view_panel` (已增强) | `gui.py` | 新增账户和币种列显示 |
+| 高级搜索 | `_build_search_panel` | `gui.py` | 多条件搜索界面，结果表格展示 |
+| 高级搜索 | `_on_search`, `_on_reset_search` | `gui.py` | 执行搜索、重置条件 |
+| 自然语言记账 | `_build_nlp_panel` | `gui.py` | 自然语言输入、解析、显示、保存 |
+| 自然语言记账 | `_on_nlp_parse`, `_on_nlp_save`, `_on_nlp_clear` | `gui.py` | 解析、保存、清空事件处理 |
+| 账户管理 | `_build_accounts_panel` | `gui.py` | Notebook 容器，包含3个标签页 |
+| 账户管理-列表 | `_build_account_list_tab`, `_refresh_accounts_table` | `gui.py` | 账户列表展示，总余额计算 |
+| 账户管理-添加 | `_build_add_account_tab`, `_on_create_account` | `gui.py` | 创建新账户表单 |
+| 账户管理-币种 | `_build_currency_tab`, `_refresh_currency_table` | `gui.py` | 币种汇率展示 |
+| 账户管理-更新汇率 | `_on_update_rate` | `gui.py` | 更新币种汇率 |
+| 数据备份 | `_on_backup` | `gui.py` | 一键备份数据库，显示备份路径 |
+| 数据还原 | `_on_restore` | `gui.py` | 选择备份文件，确认后恢复 |
+
+**高级搜索支持的条件：**
+
+| 条件 | 说明 |
+|------|------|
+| 关键词 | 在备注中模糊搜索 |
+| 交易类型 | 全部 / 支出 / 收入 |
+| 开始日期 | YYYY-MM-DD 格式，留空表示不限制 |
+| 结束日期 | YYYY-MM-DD 格式，留空表示不限制 |
+| 最小金额 | 数字，留空表示不限制 |
+| 最大金额 | 数字，留空表示不限制 |
+
+**GUI 界面结构：**
+
+```
+功能导航栏：
+├── 记一笔（新增：账户选择、币种选择）
+├── 自然语言记账（新增）
+│   ├── 输入框：支持自然语言描述
+│   ├── 解析按钮：调用 NaturalParser 解析
+│   ├── 结果显示：显示解析后的日期、金额、类型、分类
+│   ├── 示例按钮：快捷填充常用输入
+│   └── 保存按钮：保存到数据库
+├── 高级搜索（新增）
+│   ├── 搜索条件：关键词、类型、开始日期、结束日期、最小金额、最大金额
+│   ├── 搜索按钮：执行搜索
+│   ├── 重置条件按钮：清空所有条件
+│   └── 结果表格：显示匹配的交易记录
+├── 查看记录（新增：账户列、币种列）
+├── 账户管理（新增）
+│   ├── 账户列表标签页
+│   │   ├── 表格：ID、名称、类型、余额、币种
+│   │   └── 总余额：自动换算为人民币
+│   ├── 添加账户标签页
+│   │   ├── 账户名称、类型、币种、初始余额
+│   │   └── 类型说明：cash/card/alipay/wechat/other
+│   └── 币种汇率标签页
+│       ├── 表格：ID、代码、名称、符号、汇率
+│       └── 更新汇率功能
+├── 分类统计
+├── 月度报表
+├── 导出数据
+├── 导入数据
+├── 备份数据（新增）：一键备份数据库
+├── 还原数据（新增）：从备份文件恢复
+└── 退出
+```
