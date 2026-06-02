@@ -5,13 +5,24 @@ import sqlite3
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-from models import DEFAULT_CATEGORIES, Category, Transaction, User
+from models import (
+    DEFAULT_CATEGORIES,
+    DEFAULT_CURRENCIES,
+    Account,
+    Category,
+    Currency,
+    Transaction,
+    User,
+)
 
 # 数据库文件路径
 DB_PATH = "expense_tracker.db"
 
 # 加分项1：异常消费检测阈值（超过历史均值的倍数即标记为异常）
 THRESHOLD = 1.5
+
+# 默认人民币币种 ID
+DEFAULT_CURRENCY_ID = 1
 
 
 class DataManager:
@@ -30,12 +41,16 @@ class DataManager:
         self._index_by_category: Dict[int, List[Transaction]] = {}
         self._index_by_date: Dict[str, List[Transaction]] = {}
         self.categories: Dict[int, Category] = {}
+        self.currencies: Dict[int, Currency] = {}
+        self.accounts: Dict[int, Account] = {}
         self.current_user: Optional[User] = None
         self.conn: Optional[sqlite3.Connection] = None
 
         self.init_db()
         self._load_categories()
+        self._load_currencies()
         self._ensure_default_user()
+        self._ensure_default_account()
         self.reload_from_db()
 
     def init_db(self) -> None:
@@ -66,6 +81,35 @@ class DataManager:
             """
         )
 
+        # 创建币种表
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS currencies (
+                currency_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                rate_to_cny REAL NOT NULL DEFAULT 1.0
+            )
+            """
+        )
+
+        # 创建账户表
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS accounts (
+                account_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                balance REAL NOT NULL DEFAULT 0.0,
+                currency_id INTEGER NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id),
+                FOREIGN KEY (currency_id) REFERENCES currencies(currency_id)
+            )
+            """
+        )
+
         # 创建交易记录表
         cursor.execute(
             """
@@ -77,8 +121,12 @@ class DataManager:
                 category_id INTEGER NOT NULL,
                 type TEXT NOT NULL CHECK(type IN ('income', 'expense')),
                 note TEXT DEFAULT '',
+                account_id INTEGER NOT NULL DEFAULT 1,
+                currency_id INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (user_id) REFERENCES users(user_id),
-                FOREIGN KEY (category_id) REFERENCES categories(category_id)
+                FOREIGN KEY (category_id) REFERENCES categories(category_id),
+                FOREIGN KEY (account_id) REFERENCES accounts(account_id),
+                FOREIGN KEY (currency_id) REFERENCES currencies(currency_id)
             )
             """
         )
@@ -91,6 +139,16 @@ class DataManager:
                 cursor.execute(
                     "INSERT INTO categories (name, type) VALUES (?, ?)",
                     (name, cat_type),
+                )
+            self.conn.commit()
+
+        # 预置常用币种
+        cursor.execute("SELECT COUNT(*) FROM currencies")
+        if cursor.fetchone()[0] == 0:
+            for code, name, symbol, rate in DEFAULT_CURRENCIES:
+                cursor.execute(
+                    "INSERT INTO currencies (code, name, symbol, rate_to_cny) VALUES (?, ?, ?, ?)",
+                    (code, name, symbol, rate),
                 )
             self.conn.commit()
 
@@ -118,6 +176,21 @@ class DataManager:
                 created_at=created_at,
             )
 
+    def _ensure_default_account(self) -> None:
+        """确保存在默认账户，供首次使用时记账。"""
+        if self.current_user is None:
+            return
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT account_id FROM accounts WHERE user_id = ? LIMIT 1", (self.current_user.user_id,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute(
+                "INSERT INTO accounts (user_id, name, type, balance, currency_id) VALUES (?, ?, ?, ?, ?)",
+                (self.current_user.user_id, "默认账户", "cash", 0.0, DEFAULT_CURRENCY_ID),
+            )
+            self.conn.commit()
+            self._load_accounts()
+
     def _load_categories(self) -> None:
         """从数据库加载分类到内存字典。"""
         cursor = self.conn.cursor()
@@ -130,6 +203,39 @@ class DataManager:
                 type=row["type"],
             )
             self.categories[category.category_id] = category
+
+    def _load_currencies(self) -> None:
+        """从数据库加载币种到内存字典。"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT currency_id, code, name, symbol, rate_to_cny FROM currencies")
+        self.currencies = {}
+        for row in cursor.fetchall():
+            currency = Currency(
+                currency_id=row["currency_id"],
+                code=row["code"],
+                name=row["name"],
+                symbol=row["symbol"],
+                rate_to_cny=row["rate_to_cny"],
+            )
+            self.currencies[currency.currency_id] = currency
+
+    def _load_accounts(self) -> None:
+        """从数据库加载账户到内存字典。"""
+        if self.current_user is None:
+            return
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT account_id, user_id, name, type, balance, currency_id FROM accounts WHERE user_id = ?", (self.current_user.user_id,))
+        self.accounts = {}
+        for row in cursor.fetchall():
+            account = Account(
+                account_id=row["account_id"],
+                user_id=row["user_id"],
+                name=row["name"],
+                type=row["type"],
+                balance=row["balance"],
+                currency_id=row["currency_id"],
+            )
+            self.accounts[account.account_id] = account
 
     def _rebuild_indexes(self) -> None:
         """根据当前交易列表重建索引字典。"""
@@ -156,6 +262,8 @@ class DataManager:
             category_id=row["category_id"],
             type=row["type"],
             note=row["note"] or "",
+            account_id=row.get("account_id", 1),
+            currency_id=row.get("currency_id", 1),
         )
 
     def save_transaction(self, transaction: Transaction) -> Transaction:
@@ -168,8 +276,8 @@ class DataManager:
         cursor = self.conn.cursor()
         cursor.execute(
             """
-            INSERT INTO transactions (user_id, date, amount, category_id, type, note)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (user_id, date, amount, category_id, type, note, account_id, currency_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 transaction.user_id,
@@ -178,12 +286,15 @@ class DataManager:
                 transaction.category_id,
                 transaction.type,
                 transaction.note,
+                transaction.account_id,
+                transaction.currency_id,
             ),
         )
         self.conn.commit()
         transaction.transaction_id = cursor.lastrowid
         self.transactions.append(transaction)
         self._rebuild_indexes()
+        self._update_account_balance(transaction)
         return transaction
 
     def get_all_transactions(self) -> List[Transaction]:
@@ -231,7 +342,7 @@ class DataManager:
         cursor.execute(
             """
             UPDATE transactions
-            SET user_id=?, date=?, amount=?, category_id=?, type=?, note=?
+            SET user_id=?, date=?, amount=?, category_id=?, type=?, note=?, account_id=?, currency_id=?
             WHERE transaction_id=?
             """,
             (
@@ -241,6 +352,8 @@ class DataManager:
                 transaction.category_id,
                 transaction.type,
                 transaction.note,
+                transaction.account_id,
+                transaction.currency_id,
                 transaction.transaction_id,
             ),
         )
@@ -275,10 +388,19 @@ class DataManager:
         category_id: int,
         txn_type: str,
         note: str = "",
+        account_id: int = 1,
+        currency_id: int = 1,
     ) -> Transaction:
         """
         新增一条收支记录（增）。
 
+        :param date: 日期
+        :param amount: 金额
+        :param category_id: 分类ID
+        :param txn_type: 类型（income/expense）
+        :param note: 备注
+        :param account_id: 账户ID
+        :param currency_id: 币种ID
         :return: 新建的交易对象
         """
         if self.current_user is None:
@@ -291,6 +413,8 @@ class DataManager:
             category_id=category_id,
             type=txn_type,
             note=note,
+            account_id=account_id,
+            currency_id=currency_id,
         )
         return self.save_transaction(transaction)
 
@@ -411,6 +535,134 @@ class DataManager:
             return transaction.amount > avg * THRESHOLD
         except Exception:
             return False
+
+    def _update_account_balance(self, transaction: Transaction) -> None:
+        """
+        根据交易更新账户余额。
+
+        :param transaction: 交易对象
+        """
+        if transaction.account_id not in self.accounts:
+            return
+
+        account = self.accounts[transaction.account_id]
+        currency = self.currencies.get(transaction.currency_id)
+        if not currency:
+            return
+
+        amount_in_account_currency = self.convert_currency(
+            transaction.amount,
+            transaction.currency_id,
+            account.currency_id
+        )
+
+        if transaction.type == "income":
+            account.balance += amount_in_account_currency
+        else:
+            account.balance -= amount_in_account_currency
+
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE accounts SET balance = ? WHERE account_id = ?",
+            (account.balance, account.account_id),
+        )
+        self.conn.commit()
+
+    def convert_currency(self, amount: float, from_currency_id: int, to_currency_id: int) -> float:
+        """
+        加分项2：汇率转换功能。
+
+        将金额从一种货币转换为另一种货币。
+
+        :param amount: 原始金额
+        :param from_currency_id: 源币种ID
+        :param to_currency_id: 目标币种ID
+        :return: 转换后的金额
+        """
+        if from_currency_id == to_currency_id:
+            return amount
+
+        from_currency = self.currencies.get(from_currency_id)
+        to_currency = self.currencies.get(to_currency_id)
+
+        if not from_currency or not to_currency:
+            return amount
+
+        amount_in_cny = amount * from_currency.rate_to_cny
+        amount_in_target = amount_in_cny / to_currency.rate_to_cny
+
+        return round(amount_in_target, 2)
+
+    def add_account(self, name: str, account_type: str, currency_id: int = 1, balance: float = 0.0) -> Account:
+        """
+        加分项2：添加新账户。
+
+        :param name: 账户名称
+        :param account_type: 账户类型
+        :param currency_id: 币种ID
+        :param balance: 初始余额
+        :return: 新建的账户对象
+        """
+        if self.current_user is None:
+            raise ValueError("当前无有效用户")
+
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO accounts (user_id, name, type, balance, currency_id) VALUES (?, ?, ?, ?, ?)",
+            (self.current_user.user_id, name, account_type, balance, currency_id),
+        )
+        self.conn.commit()
+
+        account = Account(
+            account_id=cursor.lastrowid,
+            user_id=self.current_user.user_id,
+            name=name,
+            type=account_type,
+            balance=balance,
+            currency_id=currency_id,
+        )
+        self.accounts[account.account_id] = account
+        return account
+
+    def get_accounts(self) -> List[Account]:
+        """获取当前用户的所有账户。"""
+        return list(self.accounts.values())
+
+    def update_currency_rate(self, currency_id: int, new_rate: float) -> bool:
+        """
+        加分项2：更新币种汇率。
+
+        :param currency_id: 币种ID
+        :param new_rate: 新的汇率（相对于人民币）
+        :return: 是否更新成功
+        """
+        if currency_id not in self.currencies:
+            return False
+
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE currencies SET rate_to_cny = ? WHERE currency_id = ?",
+            (new_rate, currency_id),
+        )
+        self.conn.commit()
+
+        if cursor.rowcount > 0:
+            self.currencies[currency_id].rate_to_cny = new_rate
+            return True
+        return False
+
+    def get_total_balance_in_cny(self) -> float:
+        """
+        加分项2：计算用户所有账户的总余额（换算成人民币）。
+
+        :return: 总余额（人民币）
+        """
+        total = 0.0
+        for account in self.accounts.values():
+            currency = self.currencies.get(account.currency_id)
+            if currency:
+                total += account.balance * currency.rate_to_cny
+        return round(total, 2)
 
     def close(self) -> None:
         """关闭数据库连接。"""
