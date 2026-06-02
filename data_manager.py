@@ -262,8 +262,8 @@ class DataManager:
             category_id=row["category_id"],
             type=row["type"],
             note=row["note"] or "",
-            account_id=row.get("account_id", 1),
-            currency_id=row.get("currency_id", 1),
+            account_id=row["account_id"] if "account_id" in row.keys() else 1,
+            currency_id=row["currency_id"] if "currency_id" in row.keys() else 1,
         )
 
     def save_transaction(self, transaction: Transaction) -> Transaction:
