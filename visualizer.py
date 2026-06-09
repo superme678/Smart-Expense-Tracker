@@ -2,14 +2,16 @@
 
 from typing import Dict, List, Optional, Tuple
 
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')
 from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from data_manager import DataManager
 
 # 设置中文字体，避免图表中文乱码
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
+matplotlib.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+matplotlib.rcParams["axes.unicode_minus"] = False
 
 
 def _get_pie_chart_data(
@@ -46,9 +48,13 @@ def get_monthly_pie_figure(
     if not labels:
         return None
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig = Figure(figsize=(8, 6), dpi=100)
+    fig.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+    ax = fig.add_subplot(111)
     ax.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90)
-    ax.set_title(f"{year_month} 月度支出分类占比")
+    ax.set_title(f"{year_month} 月度支出分类占比", fontsize=14, fontfamily=["SimHei", "Microsoft YaHei", "DejaVu Sans"])
+    for text in ax.texts:
+        text.set_fontfamily(["SimHei", "Microsoft YaHei", "DejaVu Sans"])
     ax.axis("equal")
     fig.tight_layout()
     return fig
@@ -75,15 +81,20 @@ def get_monthly_trend_figure(
     income_data = [summary[m]["income"] for m in sorted_months]
     expense_data = [summary[m]["expense"] for m in sorted_months]
 
-    fig, ax = plt.subplots(figsize=(10, 4))
+    fig = Figure(figsize=(10, 4), dpi=100)
+    ax = fig.add_subplot(111)
     ax.plot(sorted_months, income_data, marker="o", label="收入", color="#2ecc71")
     ax.plot(sorted_months, expense_data, marker="s", label="支出", color="#e74c3c")
-    ax.set_title("月度收支趋势图")
-    ax.set_xlabel("月份")
-    ax.set_ylabel("金额（元）")
-    ax.legend()
+    ax.set_title("月度收支趋势图", fontsize=14, fontfamily=["SimHei", "Microsoft YaHei", "DejaVu Sans"])
+    ax.set_xlabel("月份", fontfamily=["SimHei", "Microsoft YaHei", "DejaVu Sans"])
+    ax.set_ylabel("金额（元）", fontfamily=["SimHei", "Microsoft YaHei", "DejaVu Sans"])
+    ax.legend(prop={"family": ["SimHei", "Microsoft YaHei", "DejaVu Sans"]})
     ax.grid(True, linestyle="--", alpha=0.6)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+    for label in ax.get_xticklabels():
+        label.set_rotation(45)
+        label.set_ha("right")
+    for label in ax.get_yticklabels():
+        pass
     fig.tight_layout()
     return fig
 

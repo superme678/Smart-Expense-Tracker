@@ -10,6 +10,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 from data_manager import THRESHOLD, DataManager
+from exchange_rate import get_all_supported_rates
 from file_handler import export_to_csv, export_to_json, import_from_csv, import_from_json
 from natural_parser import NaturalParser
 from validator import validate_amount, validate_date, validate_type, validate_year_month
@@ -30,12 +31,9 @@ class ExpenseTrackerGUI(tk.Tk):
         # 基础得分项 6：启动时初始化 SQLite 数据库
         self.data_manager = DataManager()
 
-        self.title("💰 Smart Expense Tracker - 智能个人记账助手")
-        self.geometry("1200x750")
-        self.minsize(1100, 650)
-
-        # 设置现代化主题和样式
-        self._setup_style()
+        self.title("Smart Expense Tracker")
+        self.geometry("1000x680")
+        self.minsize(900, 600)
 
         # 当前嵌入的图表对象，用于导出 PNG
         self._pie_figure: Optional[Figure] = None
@@ -55,224 +53,6 @@ class ExpenseTrackerGUI(tk.Tk):
         self._build_menu()
         self._build_layout()
         self._show_panel("add")
-
-    def _setup_style(self) -> None:
-        """设置现代化的 UI 样式。"""
-        style = ttk.Style()
-
-        # 尝试使用现代主题
-        available_themes = style.theme_names()
-        if "clam" in available_themes:
-            style.theme_use("clam")
-        elif "vista" in available_themes:
-            style.theme_use("vista")
-        elif "xpnative" in available_themes:
-            style.theme_use("xpnative")
-
-        # 自定义颜色
-        self.colors = {
-            "primary": "#4A90D9",
-            "primary_dark": "#357ABD",
-            "secondary": "#50C878",
-            "success": "#4CAF50",
-            "warning": "#FF9800",
-            "danger": "#F44336",
-            "info": "#2196F3",
-            "bg_light": "#F5F7FA",
-            "bg_white": "#FFFFFF",
-            "text_dark": "#2C3E50",
-            "text_light": "#7F8C8D",
-            "border": "#D5DBDB",
-        }
-
-        # 全局样式
-        self.configure(bg=self.colors["bg_light"])
-
-        # Frame 样式
-        style.configure(
-            "Main.TFrame",
-            background=self.colors["bg_light"],
-        )
-
-        # LabelFrame 样式
-        style.configure(
-            "Panel.TLabelframe",
-            background=self.colors["bg_white"],
-            borderwidth=1,
-            relief="solid",
-        )
-        style.configure(
-            "Panel.TLabelframe.Label",
-            background=self.colors["bg_white"],
-            foreground=self.colors["text_dark"],
-            font=("微软雅黑", 11, "bold"),
-            padding=5,
-        )
-
-        # 导航按钮样式
-        style.configure(
-            "Nav.TButton",
-            font=("微软雅黑", 10),
-            padding=12,
-            background=self.colors["bg_white"],
-            foreground=self.colors["text_dark"],
-            borderwidth=1,
-            relief="flat",
-        )
-        style.map(
-            "Nav.TButton",
-            background=[("active", self.colors["primary"]), ("hover", self.colors["bg_light"])],
-            foreground=[("active", "white"), ("hover", self.colors["primary"])],
-        )
-
-        # 功能按钮样式
-        style.configure(
-            "Action.TButton",
-            font=("微软雅黑", 10, "bold"),
-            padding=10,
-            background=self.colors["primary"],
-            foreground="white",
-            borderwidth=0,
-            relief="flat",
-        )
-        style.map(
-            "Action.TButton",
-            background=[("active", self.colors["primary_dark"]), ("hover", "#5BA3E8")],
-            foreground=[("active", "white"), ("hover", "white")],
-        )
-
-        # 成功按钮样式
-        style.configure(
-            "Success.TButton",
-            font=("微软雅黑", 10, "bold"),
-            padding=10,
-            background=self.colors["success"],
-            foreground="white",
-            borderwidth=0,
-            relief="flat",
-        )
-        style.map(
-            "Success.TButton",
-            background=[("active", "#45A049"), ("hover", "#66BB6A")],
-        )
-
-        # 警告按钮样式
-        style.configure(
-            "Warning.TButton",
-            font=("微软雅黑", 10),
-            padding=10,
-            background=self.colors["warning"],
-            foreground="white",
-            borderwidth=0,
-            relief="flat",
-        )
-
-        # 危险按钮样式
-        style.configure(
-            "Danger.TButton",
-            font=("微软雅黑", 10),
-            padding=10,
-            background=self.colors["danger"],
-            foreground="white",
-            borderwidth=0,
-            relief="flat",
-        )
-
-        # Entry 样式
-        style.configure(
-            "Modern.TEntry",
-            padding=8,
-            fieldbackground=self.colors["bg_white"],
-            borderwidth=1,
-            relief="solid",
-        )
-
-        # Combobox 样式
-        style.configure(
-            "Modern.TCombobox",
-            padding=8,
-            fieldbackground=self.colors["bg_white"],
-            borderwidth=1,
-            relief="solid",
-        )
-
-        # Notebook 样式
-        style.configure(
-            "Modern.TNotebook",
-            background=self.colors["bg_white"],
-            borderwidth=0,
-        )
-        style.configure(
-            "Modern.TNotebook.Tab",
-            padding=[20, 10],
-            font=("微软雅黑", 10),
-            background=self.colors["bg_light"],
-            foreground=self.colors["text_light"],
-        )
-        style.map(
-            "Modern.TNotebook.Tab",
-            background=[("selected", self.colors["bg_white"])],
-            foreground=[("selected", self.colors["primary"])],
-            expand=[("selected", [1, 1, 1, 0])],
-        )
-
-        # Treeview 样式
-        style.configure(
-            "Modern.Treeview",
-            background=self.colors["bg_white"],
-            fieldbackground=self.colors["bg_white"],
-            foreground=self.colors["text_dark"],
-            rowheight=30,
-            font=("微软雅黑", 9),
-            borderwidth=0,
-        )
-        style.configure(
-            "Modern.Treeview.Heading",
-            background=self.colors["primary"],
-            foreground="white",
-            font=("微软雅黑", 9, "bold"),
-            padding=8,
-            relief="flat",
-        )
-        style.map(
-            "Modern.Treeview",
-            background=[("selected", self.colors["primary"])],
-            foreground=[("selected", "white")],
-        )
-
-        # Label 样式
-        style.configure(
-            "Title.TLabel",
-            font=("微软雅黑", 14, "bold"),
-            foreground=self.colors["text_dark"],
-            background=self.colors["bg_light"],
-        )
-        style.configure(
-            "Subtitle.TLabel",
-            font=("微软雅黑", 10),
-            foreground=self.colors["text_light"],
-            background=self.colors["bg_light"],
-        )
-        style.configure(
-            "Form.TLabel",
-            font=("微软雅黑", 10),
-            foreground=self.colors["text_dark"],
-            background=self.colors["bg_white"],
-        )
-        style.configure(
-            "Stat.TLabel",
-            font=("微软雅黑", 11, "bold"),
-            foreground=self.colors["primary"],
-            background=self.colors["bg_white"],
-        )
-
-        # Radiobutton 样式
-        style.configure(
-            "Modern.TRadiobutton",
-            font=("微软雅黑", 10),
-            background=self.colors["bg_white"],
-            foreground=self.colors["text_dark"],
-        )
 
     def _build_menu(self) -> None:
         """
@@ -310,86 +90,55 @@ class ExpenseTrackerGUI(tk.Tk):
         nav_frame = ttk.LabelFrame(main_frame, text="功能导航", padding=8)
         nav_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
 
-        # 标题区域
-        title_frame = ttk.Frame(nav_frame)
-        title_frame.pack(fill=tk.X, pady=(15, 10))
-        ttk.Label(
-            title_frame,
-            text="💰 智能记账",
-            style="Title.TLabel",
-        ).pack()
-        ttk.Label(
-            title_frame,
-            text="Smart Expense Tracker",
-            style="Subtitle.TLabel",
-        ).pack()
-
-        # 分隔线
-        ttk.Separator(nav_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
-
-        # 导航按钮
         nav_items = [
-            ("✏️ 记一笔", "add"),
-            ("💬 自然语言记账", "nlp"),
-            ("🔍 高级搜索", "search"),
-            ("📋 查看记录", "view"),
-            ("🏦 账户管理", "accounts"),
-            ("📊 分类统计", "stats"),
-            ("📈 月度报表", "report"),
+            ("记一笔", "add"),
+            ("自然语言记账", "nlp"),
+            ("高级搜索", "search"),
+            ("查看记录", "view"),
+            ("账户管理", "accounts"),
+            ("分类统计", "stats"),
+            ("月度报表", "report"),
+            ("导出数据", None),
+            ("导入数据", None),
+            ("备份数据", None),
+            ("还原数据", None),
+            ("退出", None),
         ]
         for text, panel_key in nav_items:
-            ttk.Button(
-                nav_frame,
-                text=text,
-                style="Nav.TButton",
-                command=lambda k=panel_key: self._show_panel(k),
-            ).pack(pady=3, fill=tk.X, padx=5)
+            if panel_key:
+                ttk.Button(
+                    nav_frame,
+                    text=text,
+                    width=14,
+                    command=lambda k=panel_key: self._show_panel(k),
+                ).pack(pady=4, fill=tk.X)
+            elif text == "导出数据":
+                ttk.Button(nav_frame, text=text, width=14, command=self._on_export).pack(
+                    pady=4, fill=tk.X
+                )
+            elif text == "导入数据":
+                ttk.Button(nav_frame, text=text, width=14, command=self._on_import).pack(
+                    pady=4, fill=tk.X
+                )
+            elif text == "备份数据":
+                ttk.Button(nav_frame, text=text, width=14, command=self._on_backup).pack(
+                    pady=4, fill=tk.X
+                )
+            elif text == "还原数据":
+                ttk.Button(nav_frame, text=text, width=14, command=self._on_restore).pack(
+                    pady=4, fill=tk.X
+                )
+            else:
+                ttk.Button(nav_frame, text=text, width=14, command=self._on_exit).pack(
+                    pady=4, fill=tk.X
+                )
 
-        # 工具按钮区域
-        ttk.Separator(nav_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        tool_label = ttk.Label(
+        user_label = ttk.Label(
             nav_frame,
-            text="工具",
-            style="Subtitle.TLabel",
+            text=f"用户：{self.data_manager.current_user.username}",
+            wraplength=120,
         )
-        tool_label.pack(anchor=tk.W, padx=10, pady=(5, 2))
-
-        tool_items = [
-            ("📤 导出数据", self._on_export),
-            ("📥 导入数据", self._on_import),
-            ("💾 备份数据", self._on_backup),
-            ("🔄 还原数据", self._on_restore),
-        ]
-        for text, command in tool_items:
-            ttk.Button(
-                nav_frame,
-                text=text,
-                style="Nav.TButton",
-                command=command,
-            ).pack(pady=2, fill=tk.X, padx=5)
-
-        # 用户信息区域
-        ttk.Separator(nav_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        user_frame = ttk.Frame(nav_frame)
-        user_frame.pack(fill=tk.X, padx=10, pady=5)
-        ttk.Label(
-            user_frame,
-            text="👤 当前用户",
-            style="Subtitle.TLabel",
-        ).pack(anchor=tk.W)
-        ttk.Label(
-            user_frame,
-            text=f"  {self.data_manager.current_user.username}",
-            style="Stat.TLabel",
-        ).pack(anchor=tk.W, pady=(2, 0))
-
-        # 退出按钮
-        ttk.Button(
-            nav_frame,
-            text="🚪 退出",
-            style="Warning.TButton",
-            command=self._on_exit,
-        ).pack(pady=10, padx=10, fill=tk.X, side=tk.BOTTOM)
+        user_label.pack(side=tk.BOTTOM, pady=(20, 0))
 
         # 右侧主内容区
         self.content_frame = ttk.Frame(main_frame)
@@ -425,153 +174,66 @@ class ExpenseTrackerGUI(tk.Tk):
 
     def _build_add_panel(self) -> ttk.Frame:
         """构建「记一笔」表单面板。"""
-        panel = ttk.Frame(self.content_frame, style="Main.TFrame")
-        panel.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        panel = ttk.LabelFrame(self.content_frame, text="记一笔（收入/支出）", padding=16)
 
-        # 标题
-        title_frame = ttk.Frame(panel, style="Main.TFrame")
-        title_frame.pack(fill=tk.X, pady=(0, 20))
-        ttk.Label(
-            title_frame,
-            text="✏️ 记一笔",
-            style="Title.TLabel",
-        ).pack(side=tk.LEFT)
-        ttk.Label(
-            title_frame,
-            text="记录您的收入和支出",
-            style="Subtitle.TLabel",
-        ).pack(side=tk.LEFT, padx=(15, 0))
-
-        # 主表单区域
-        form_container = ttk.LabelFrame(
-            panel,
-            text="📝 交易信息",
-            style="Panel.TLabelframe",
-            padding=20,
-        )
-        form_container.pack(fill=tk.X)
-
-        # 类型选择（更美观的样式）
+        # 类型：Radiobutton 限定 income / expense（得分项 4）
         self.txn_type_var = tk.StringVar(value="expense")
-        type_frame = ttk.Frame(form_container, style="Main.TFrame")
-        type_frame.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=5)
-        ttk.Label(type_frame, text="交易类型：", style="Form.TLabel").pack(side=tk.LEFT)
+        type_frame = ttk.Frame(panel)
+        type_frame.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=6)
+        ttk.Label(type_frame, text="类型：").pack(side=tk.LEFT)
+        ttk.Radiobutton(
+            type_frame, text="支出", variable=self.txn_type_var, value="expense",
+            command=self._on_type_changed,
+        ).pack(side=tk.LEFT, padx=8)
+        ttk.Radiobutton(
+            type_frame, text="收入", variable=self.txn_type_var, value="income",
+            command=self._on_type_changed,
+        ).pack(side=tk.LEFT)
 
-        # 支出按钮
-        expense_btn = tk.Button(
-            type_frame,
-            text="💰 支出",
-            font=("微软雅黑", 10, "bold"),
-            bg=self.colors["primary"],
-            fg="white",
-            relief="flat",
-            padx=20,
-            pady=8,
-            cursor="hand2",
-            command=lambda: self._set_type("expense"),
-        )
-        expense_btn.pack(side=tk.LEFT, padx=10)
-
-        # 收入按钮
-        income_btn = tk.Button(
-            type_frame,
-            text="💵 收入",
-            font=("微软雅黑", 10),
-            bg=self.colors["bg_light"],
-            fg=self.colors["text_dark"],
-            relief="flat",
-            padx=20,
-            pady=8,
-            cursor="hand2",
-            command=lambda: self._set_type("income"),
-        )
-        income_btn.pack(side=tk.LEFT)
-
-        # 存储按钮引用以便切换样式
-        self._type_buttons = {"expense": expense_btn, "income": income_btn}
-
-        # 网格布局
-        fields = [
-            ("📅 日期", "date", "entry"),
-            ("📂 分类", "category", "combo"),
-            ("💰 金额", "amount", "entry"),
-            ("🏦 账户", "account", "combo"),
-            ("💱 币种", "currency", "combo"),
-            ("📝 备注", "note", "entry"),
-        ]
-
-        for i, (label_text, field_name, field_type) in enumerate(fields, start=1):
-            ttk.Label(
-                form_container,
-                text=label_text + "：",
-                style="Form.TLabel",
-            ).grid(row=i, column=0, sticky=tk.W, pady=10)
-
-            if field_type == "entry":
-                entry = ttk.Entry(form_container, style="Modern.TEntry", width=35)
-                entry.grid(row=i, column=1, sticky=tk.W, pady=10)
-                setattr(self, f"{field_name}_entry", entry)
-            else:
-                combo = ttk.Combobox(form_container, style="Modern.TCombobox", width=33, state="readonly")
-                combo.grid(row=i, column=1, sticky=tk.W, pady=10)
-                setattr(self, f"{field_name}_combo", combo)
-
-        # 设置日期默认值
+        # 日期 Entry（得分项 4：正则校验）
+        ttk.Label(panel, text="日期：").grid(row=1, column=0, sticky=tk.W, pady=6)
+        self.date_entry = ttk.Entry(panel, width=30)
+        self.date_entry.grid(row=1, column=1, sticky=tk.W, pady=6)
         self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
         self.date_entry.bind("<FocusOut>", self._validate_date_field)
+
+        # 分类 Combobox（得分项 3：下拉选择）
+        ttk.Label(panel, text="分类：").grid(row=2, column=0, sticky=tk.W, pady=6)
+        self.category_combo = ttk.Combobox(panel, width=28, state="readonly")
+        self.category_combo.grid(row=2, column=1, sticky=tk.W, pady=6)
+        self._refresh_category_combo()
+
+        # 金额 Entry（得分项 4：正则校验）
+        ttk.Label(panel, text="金额：").grid(row=3, column=0, sticky=tk.W, pady=6)
+        self.amount_entry = ttk.Entry(panel, width=30)
+        self.amount_entry.grid(row=3, column=1, sticky=tk.W, pady=6)
         self.amount_entry.bind("<FocusOut>", self._validate_amount_field)
 
-        # 提示信息
-        hint_frame = ttk.Frame(form_container, style="Main.TFrame")
-        hint_frame.grid(row=len(fields) + 1, column=0, columnspan=2, sticky=tk.W, pady=(15, 0))
-        ttk.Label(
-            hint_frame,
-            text="💡 提示：日期格式 YYYY-MM-DD（如 2026-06-02），金额最多两位小数",
-            style="Subtitle.TLabel",
-        ).pack(anchor=tk.W)
-
-        # 按钮区域
-        button_frame = ttk.Frame(panel, style="Main.TFrame")
-        button_frame.pack(fill=tk.X, pady=25)
-
-        save_btn = tk.Button(
-            button_frame,
-            text="✅ 保存交易",
-            font=("微软雅黑", 11, "bold"),
-            bg=self.colors["success"],
-            fg="white",
-            relief="flat",
-            padx=40,
-            pady=12,
-            cursor="hand2",
-            command=self._on_save_transaction,
-        )
-        save_btn.pack()
-
-        # 刷新下拉列表
-        self._refresh_category_combo()
+        # 账户选择
+        ttk.Label(panel, text="账户：").grid(row=4, column=0, sticky=tk.W, pady=6)
+        self.account_combo = ttk.Combobox(panel, width=28, state="readonly")
+        self.account_combo.grid(row=4, column=1, sticky=tk.W, pady=6)
         self._refresh_account_combo()
+
+        # 币种选择
+        ttk.Label(panel, text="币种：").grid(row=5, column=0, sticky=tk.W, pady=6)
+        self.currency_combo = ttk.Combobox(panel, width=28, state="readonly")
+        self.currency_combo.grid(row=5, column=1, sticky=tk.W, pady=6)
         self._refresh_currency_combo()
 
+        # 备注
+        ttk.Label(panel, text="备注：").grid(row=6, column=0, sticky=tk.W, pady=6)
+        self.note_entry = ttk.Entry(panel, width=30)
+        self.note_entry.grid(row=6, column=1, sticky=tk.W, pady=6)
+
+        ttk.Label(panel, text="提示：日期格式 YYYY-MM-DD，金额最多两位小数").grid(
+            row=7, column=0, columnspan=2, sticky=tk.W, pady=(4, 0)
+        )
+
+        ttk.Button(panel, text="保存", command=self._on_save_transaction).grid(
+            row=8, column=0, columnspan=2, pady=16
+        )
         return panel
-
-    def _set_type(self, txn_type: str) -> None:
-        """设置交易类型并切换按钮样式。"""
-        self.txn_type_var.set(txn_type)
-
-        # 切换按钮样式
-        for t, btn in self._type_buttons.items():
-            if t == txn_type:
-                btn.configure(bg=self.colors["primary"], fg="white", font=("微软雅黑", 10, "bold"))
-            else:
-                btn.configure(bg=self.colors["bg_light"], fg=self.colors["text_dark"], font=("微软雅黑", 10))
-
-        # 刷新分类
-        self._refresh_category_combo()
-
-    def _on_type_changed(self) -> None:
-        """类型切换时刷新分类下拉列表。"""
-        self._refresh_category_combo()
 
     def _on_type_changed(self) -> None:
         """类型切换时刷新分类下拉列表。"""
@@ -709,142 +371,50 @@ class ExpenseTrackerGUI(tk.Tk):
 
     def _build_view_panel(self) -> ttk.Frame:
         """构建「查看记录」Treeview 面板。"""
-        panel = ttk.Frame(self.content_frame, style="Main.TFrame")
-        panel.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-
-        # 标题
-        title_frame = ttk.Frame(panel, style="Main.TFrame")
-        title_frame.pack(fill=tk.X, pady=(0, 15))
-        ttk.Label(
-            title_frame,
-            text="📋 交易记录",
-            style="Title.TLabel",
-        ).pack(side=tk.LEFT)
-        ttk.Label(
-            title_frame,
-            text="查看和管理所有交易记录",
-            style="Subtitle.TLabel",
-        ).pack(side=tk.LEFT, padx=(15, 0))
-
-        # 统计卡片
-        stats_frame = ttk.Frame(panel, style="Main.TFrame")
-        stats_frame.pack(fill=tk.X, pady=(0, 15))
-
-        # 统计信息卡片
-        stats = [
-            ("📊 总记录数", "0", self.colors["primary"]),
-            ("💰 总支出", "¥0.00", self.colors["danger"]),
-            ("💵 总收入", "¥0.00", self.colors["success"]),
-            ("📈 结余", "¥0.00", self.colors["info"]),
-        ]
-
-        self._stat_labels = {}
-        for i, (title, value, color) in enumerate(stats):
-            card = tk.Frame(stats_frame, bg=self.colors["bg_white"], relief="flat", padx=15, pady=10)
-            card.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-
-            tk.Label(
-                card,
-                text=title,
-                font=("微软雅黑", 9),
-                fg=self.colors["text_light"],
-                bg=self.colors["bg_white"],
-            ).pack(anchor=tk.W)
-
-            value_label = tk.Label(
-                card,
-                text=value,
-                font=("微软雅黑", 14, "bold"),
-                fg=color,
-                bg=self.colors["bg_white"],
-            )
-            value_label.pack(anchor=tk.W, pady=(3, 0))
-            self._stat_labels[title] = value_label
-
-        # 表格容器
-        table_container = ttk.LabelFrame(
-            panel,
-            text="所有交易",
-            style="Panel.TLabelframe",
-            padding=10,
-        )
-        table_container.pack(fill=tk.BOTH, expand=True)
+        panel = ttk.LabelFrame(self.content_frame, text="所有交易记录", padding=8)
 
         columns = ("id", "date", "type", "category", "amount", "currency", "account", "note")
         self.records_tree = ttk.Treeview(
-            table_container,
-            columns=columns,
-            show="headings",
-            height=16,
-            style="Modern.Treeview",
+            panel, columns=columns, show="headings", height=18
         )
-
         headings = {
             "id": "ID",
-            "date": "📅 日期",
-            "type": "📂 类型",
-            "category": "🏷️ 分类",
-            "amount": "💰 金额",
-            "currency": "💱 币种",
-            "account": "🏦 账户",
-            "note": "📝 备注",
+            "date": "日期",
+            "type": "类型",
+            "category": "分类",
+            "amount": "金额",
+            "currency": "币种",
+            "account": "账户",
+            "note": "备注",
         }
-
         for col, title in headings.items():
             self.records_tree.heading(col, text=title)
             if col == "note":
-                width = 180
+                width = 150
             elif col in ("account", "category"):
                 width = 100
-            elif col in ("date", "type", "currency"):
-                width = 90
             else:
-                width = 60
+                width = 70
             self.records_tree.column(col, width=width, anchor=tk.CENTER)
 
         # 加分项1：异常消费行标红加粗
         self.records_tree.tag_configure(
-            "anomaly",
-            foreground=self.colors["danger"],
-            font=("微软雅黑", 9, "bold"),
-            background="#FFF5F5",
+            "anomaly", foreground="red", font=("微软雅黑", 9, "bold")
         )
 
-        scrollbar = ttk.Scrollbar(table_container, orient=tk.VERTICAL, command=self.records_tree.yview)
+        scrollbar = ttk.Scrollbar(panel, orient=tk.VERTICAL, command=self.records_tree.yview)
         self.records_tree.configure(yscrollcommand=scrollbar.set)
         self.records_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 按钮区域
-        btn_frame = ttk.Frame(panel, style="Main.TFrame")
-        btn_frame.pack(fill=tk.X, pady=(15, 0))
-
-        tk.Button(
-            btn_frame,
-            text="🔄 刷新",
-            font=("微软雅黑", 10),
-            bg=self.colors["info"],
-            fg="white",
-            relief="flat",
-            padx=25,
-            pady=8,
-            cursor="hand2",
-            command=self._refresh_records_table,
-        ).pack(side=tk.LEFT, padx=5)
-
-        tk.Button(
-            btn_frame,
-            text="🗑️ 删除选中",
-            font=("微软雅黑", 10),
-            bg=self.colors["danger"],
-            fg="white",
-            relief="flat",
-            padx=25,
-            pady=8,
-            cursor="hand2",
-            command=self._on_delete_record,
-        ).pack(side=tk.LEFT, padx=5)
-
+        btn_frame = ttk.Frame(panel)
+        btn_frame.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(btn_frame, text="刷新", command=self._refresh_records_table).pack(
+            side=tk.LEFT, padx=4
+        )
+        ttk.Button(btn_frame, text="删除选中", command=self._on_delete_record).pack(
+            side=tk.LEFT, padx=4
+        )
         return panel
 
     def _refresh_records_table(self) -> None:
@@ -856,11 +426,6 @@ class ExpenseTrackerGUI(tk.Tk):
         for item in self.records_tree.get_children():
             self.records_tree.delete(item)
 
-        # 统计信息
-        total_records = len(self.data_manager.transactions)
-        total_expense = 0.0
-        total_income = 0.0
-
         for txn in self.data_manager.transactions:
             category = self.data_manager.categories.get(txn.category_id)
             cat_name = category.name if category else "未知"
@@ -870,24 +435,12 @@ class ExpenseTrackerGUI(tk.Tk):
             account = self.data_manager.accounts.get(txn.account_id)
             account_name = account.name if account else "未知"
             type_label = "收入" if txn.type == "income" else "支出"
-
-            # 计算统计（换算为人民币）
-            amount_in_cny = txn.amount
-            if currency and currency.code != "CNY":
-                amount_in_cny = txn.amount * currency.rate
-
-            if txn.type == "expense":
-                total_expense += amount_in_cny
-            else:
-                total_income += amount_in_cny
-
             # 加分项1：实时计算异常状态并设置行标签
             is_anomaly = self.data_manager.check_anomaly(txn)
             tags = ("anomaly",) if is_anomaly else ()
             note_text = txn.note
             if is_anomaly:
                 note_text = f"{txn.note} [异常]" if txn.note else "[异常]"
-
             self.records_tree.insert(
                 "",
                 tk.END,
@@ -903,18 +456,6 @@ class ExpenseTrackerGUI(tk.Tk):
                 ),
                 tags=tags,
             )
-
-        # 更新统计卡片
-        if hasattr(self, "_stat_labels"):
-            balance = total_income - total_expense
-            self._stat_labels["📊 总记录数"].configure(text=str(total_records))
-            self._stat_labels["💰 总支出"].configure(text=f"¥{total_expense:.2f}")
-            self._stat_labels["💵 总收入"].configure(text=f"¥{total_income:.2f}")
-            balance_label = self._stat_labels["📈 结余"]
-            if balance >= 0:
-                balance_label.configure(text=f"¥{balance:.2f}", fg=self.colors["success"])
-            else:
-                balance_label.configure(text=f"-¥{abs(balance):.2f}", fg=self.colors["danger"])
 
     def _on_delete_record(self) -> None:
         """删除选中的交易记录（得分项 6）。"""
@@ -1489,18 +1030,27 @@ class ExpenseTrackerGUI(tk.Tk):
         self.currency_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        update_frame = ttk.LabelFrame(parent, text="更新汇率", padding=8)
-        update_frame.pack(fill=tk.X, pady=(0, 8))
+        auto_frame = ttk.LabelFrame(parent, text="自动更新汇率", padding=8)
+        auto_frame.pack(fill=tk.X, pady=(0, 8))
 
-        ttk.Label(update_frame, text="选择币种：").grid(row=0, column=0, sticky=tk.W, pady=4)
-        self.update_currency_combo = ttk.Combobox(update_frame, state="readonly", width=20)
+        ttk.Button(
+            auto_frame,
+            text="一键更新所有币种汇率（从网络获取实时汇率）",
+            command=self._on_auto_update_rates,
+        ).pack(fill=tk.X, padx=4, pady=4)
+
+        manual_frame = ttk.LabelFrame(parent, text="手动更新汇率（可选）", padding=8)
+        manual_frame.pack(fill=tk.X, pady=(0, 8))
+
+        ttk.Label(manual_frame, text="选择币种：").grid(row=0, column=0, sticky=tk.W, pady=4)
+        self.update_currency_combo = ttk.Combobox(manual_frame, state="readonly", width=20)
         self.update_currency_combo.grid(row=0, column=1, sticky=tk.W, pady=4, padx=(0, 8))
 
-        ttk.Label(update_frame, text="新汇率：").grid(row=0, column=2, sticky=tk.W, pady=4)
-        self.new_rate_entry = ttk.Entry(update_frame, width=15)
+        ttk.Label(manual_frame, text="新汇率：").grid(row=0, column=2, sticky=tk.W, pady=4)
+        self.new_rate_entry = ttk.Entry(manual_frame, width=15)
         self.new_rate_entry.grid(row=0, column=3, sticky=tk.W, pady=4, padx=(0, 8))
 
-        ttk.Button(update_frame, text="更新", command=self._on_update_rate).grid(
+        ttk.Button(manual_frame, text="更新", command=self._on_update_rate).grid(
             row=0, column=4, sticky=tk.W, pady=4, padx=4
         )
 
@@ -1508,7 +1058,7 @@ class ExpenseTrackerGUI(tk.Tk):
         tips_frame.pack(fill=tk.X)
         ttk.Label(
             tips_frame,
-            text="汇率表示 1 单位外币可兑换的人民币数量。例如：1 美元 = 7.24 人民币，则汇率为 7.24",
+            text="汇率表示 1 单位外币可兑换的人民币数量。建议使用\"一键更新\"从网络获取实时汇率。",
         ).pack(anchor=tk.W)
 
     def _refresh_accounts_table(self) -> None:
@@ -1679,6 +1229,50 @@ class ExpenseTrackerGUI(tk.Tk):
         except Exception as exc:
             messagebox.showerror("更新失败", str(exc))
 
+    def _on_auto_update_rates(self) -> None:
+        """一键从网络获取实时汇率并更新所有币种。"""
+        try:
+            result = messagebox.askyesno(
+                "确认更新",
+                "是否从网络获取最新汇率并更新所有币种？\n\n（需要网络连接）"
+            )
+            if not result:
+                return
+
+            messagebox.showinfo("提示", "正在获取汇率，请稍候...")
+
+            rates = get_all_supported_rates()
+            if not rates:
+                messagebox.showerror("失败", "无法获取汇率，请检查网络连接。")
+                return
+
+            updated_count = 0
+            updates = []
+
+            for cur in self.data_manager.currencies.values():
+                code = cur.code
+                if code in rates:
+                    new_rate = rates[code]
+                    if self.data_manager.update_currency_rate(cur.currency_id, new_rate):
+                        updated_count += 1
+                        old_rate = cur.rate_to_cny
+                        updates.append(f"{code}: {old_rate:.4f} -> {new_rate:.4f}")
+
+            self._refresh_currency_table()
+            self._refresh_currency_combo()
+
+            if updated_count > 0:
+                msg = f"成功更新 {updated_count} 个币种的汇率！\n\n"
+                msg += "\n".join(updates[:10])
+                if len(updates) > 10:
+                    msg += f"\n... 还有 {len(updates) - 10} 个已更新"
+                messagebox.showinfo("成功", msg)
+            else:
+                messagebox.showinfo("提示", "没有需要更新的币种。")
+
+        except Exception as exc:
+            messagebox.showerror("更新失败", f"自动更新汇率失败：{str(exc)}\n\n你可以稍后再试，或使用手动更新。")
+
     # ---------- 分类统计面板（得分项 2） ----------
 
     def _build_stats_panel(self) -> ttk.Frame:
@@ -1775,7 +1369,7 @@ class ExpenseTrackerGUI(tk.Tk):
     # ---------- 月度报表面板（得分项 7） ----------
 
     def _build_report_panel(self) -> ttk.Frame:
-        """构建「月度报表」面板，嵌入饼图与折线图。"""
+        """构建「月度报表」面板，嵌入饼图与折线图（带滚动条）。"""
         panel = ttk.LabelFrame(self.content_frame, text="月度报表", padding=8)
 
         ctrl_frame = ttk.Frame(panel)
@@ -1790,11 +1384,43 @@ class ExpenseTrackerGUI(tk.Tk):
             side=tk.LEFT, padx=4
         )
 
-        self.pie_chart_frame = ttk.LabelFrame(panel, text="支出分类占比（饼图）", padding=4)
-        self.pie_chart_frame.pack(fill=tk.BOTH, expand=True, pady=4)
+        scroll_container = ttk.Frame(panel)
+        scroll_container.pack(fill=tk.BOTH, expand=True)
 
-        self.trend_chart_frame = ttk.LabelFrame(panel, text="近6个月收支趋势（折线图）", padding=4)
-        self.trend_chart_frame.pack(fill=tk.BOTH, expand=True, pady=4)
+        scrollbar = ttk.Scrollbar(scroll_container, orient=tk.VERTICAL)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        canvas = tk.Canvas(scroll_container, yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollbar.config(command=canvas.yview)
+
+        charts_frame = ttk.Frame(canvas)
+        canvas_window = canvas.create_window((0, 0), window=charts_frame, anchor="nw")
+
+        def on_charts_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+
+        charts_frame.bind("<Configure>", on_charts_configure)
+        canvas.bind("<Configure>", on_canvas_configure)
+
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", on_mousewheel)
+
+        charts_frame.columnconfigure(0, weight=1)
+
+        self.pie_chart_frame = ttk.LabelFrame(charts_frame, text="支出分类占比（饼图）", padding=4, height=420)
+        self.pie_chart_frame.grid(row=0, column=0, sticky="ew", pady=4)
+        self.pie_chart_frame.grid_propagate(False)
+
+        self.trend_chart_frame = ttk.LabelFrame(charts_frame, text="近6个月收支趋势（折线图）", padding=4, height=380)
+        self.trend_chart_frame.grid(row=1, column=0, sticky="ew", pady=4)
+        self.trend_chart_frame.grid_propagate(False)
 
         return panel
 
@@ -1820,45 +1446,46 @@ class ExpenseTrackerGUI(tk.Tk):
         canvas = FigureCanvasTkAgg(fig, master=frame)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        frame.update_idletasks()
         return canvas
 
     def _render_charts(self) -> None:
         """生成并嵌入饼图与折线图。"""
+        year_month = self.month_combo.get().strip()
+        if not year_month:
+            messagebox.showwarning("提示", "请选择年月。")
+            return
+
         try:
-            year_month = self.month_combo.get().strip()
-            if not year_month:
-                messagebox.showwarning("提示", "请选择年月。")
-                return
             validate_year_month(year_month)
-
-            # 饼图
-            self._clear_chart_frame(self.pie_chart_frame)
-            pie_fig = get_monthly_pie_figure(self.data_manager, year_month)
-            if pie_fig is None:
-                ttk.Label(
-                    self.pie_chart_frame, text=f"{year_month} 暂无支出记录。"
-                ).pack(pady=20)
-                self._pie_figure = None
-                self._pie_canvas = None
-            else:
-                self._pie_figure = pie_fig
-                self._pie_canvas = self._embed_figure(self.pie_chart_frame, pie_fig)
-
-            # 折线图
-            self._clear_chart_frame(self.trend_chart_frame)
-            trend_fig = get_monthly_trend_figure(self.data_manager, months=6)
-            if trend_fig is None:
-                ttk.Label(self.trend_chart_frame, text="暂无交易记录。").pack(pady=20)
-                self._trend_figure = None
-                self._trend_canvas = None
-            else:
-                self._trend_figure = trend_fig
-                self._trend_canvas = self._embed_figure(self.trend_chart_frame, trend_fig)
-
         except ValueError as exc:
             messagebox.showerror("格式错误", str(exc))
-        except Exception as exc:
-            messagebox.showerror("生成失败", str(exc))
+            return
+
+        self._clear_chart_frame(self.pie_chart_frame)
+        self._clear_chart_frame(self.trend_chart_frame)
+
+        self._pie_figure = None
+        self._pie_canvas = None
+        self._trend_figure = None
+        self._trend_canvas = None
+
+        trend_fig = get_monthly_trend_figure(self.data_manager, months=6)
+        pie_fig = get_monthly_pie_figure(self.data_manager, year_month)
+
+        if pie_fig is None:
+            ttk.Label(self.pie_chart_frame, text=f"{year_month} 暂无支出记录。").pack(pady=20)
+        else:
+            self._pie_figure = pie_fig
+            self._pie_canvas = self._embed_figure(self.pie_chart_frame, pie_fig)
+
+        if trend_fig is None:
+            ttk.Label(self.trend_chart_frame, text="暂无交易记录。").pack(pady=20)
+        else:
+            self._trend_figure = trend_fig
+            self._trend_canvas = self._embed_figure(self.trend_chart_frame, trend_fig)
+
+        self.update_idletasks()
 
     def _export_charts(self) -> None:
         """将当前嵌入的图表导出为 PNG 文件。"""
