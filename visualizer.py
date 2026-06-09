@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple
 
 import matplotlib
 matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
